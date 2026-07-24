@@ -21,8 +21,9 @@ systems, using active drifter wormholes as shortcuts.
 - [django-eveonline-sde](https://github.com/Solar-Helix-Independent-Transport/django-eveonline-sde) (eve_sde)
 - django-esi >= 9
 
-If you are already running allianceauth-corptools, eve_sde is already
-installed and loaded on your system and no extra setup is needed for it.
+If you are already running an app that uses eve_sde (for example
+allianceauth-corptools), eve_sde is already installed and loaded on
+your system and no extra setup is needed for it.
 
 ## Installation: bare metal
 
@@ -34,7 +35,7 @@ Run all commands inside the venv of the Auth installation
 source /home/allianceserver/venv/auth/bin/activate
 
 # 2. Install the app (from a git repo, or from PyPI if published)
-pip install git+https://github.com/faky91/aa-swift-drift.git@v0.3.0
+pip install git+https://github.com/faky91/aa-swift-drift.git@v0.4.1
 # alternatively from a local checkout:
 # pip install /path/to/aa-swift-drift
 ```
@@ -47,7 +48,7 @@ INSTALLED_APPS += [
     "swiftdrift",
 ]
 
-# Only needed if eve_sde is NOT installed yet (e.g. no corptools):
+# Only needed if no other app has installed eve_sde yet:
 # modeltranslation must be FIRST in INSTALLED_APPS, then add eve_sde.
 # INSTALLED_APPS.insert(0, "modeltranslation")
 # INSTALLED_APPS += ["eve_sde"]
@@ -59,7 +60,7 @@ CELERYBEAT_SCHEDULE["swiftdrift_delete_expired"] = {
 }
 
 # Recommended (from the eve_sde README): daily check for SDE updates.
-# Skip this if corptools already configured it.
+# Skip this if another eve_sde-based app already configured it.
 if "eve_sde" in INSTALLED_APPS:
     CELERYBEAT_SCHEDULE["EVE SDE :: Check for SDE Updates"] = {
         "task": "eve_sde.tasks.check_for_sde_updates",
@@ -79,7 +80,7 @@ python /home/allianceserver/myauth/manage.py migrate
 # Collect static files
 python /home/allianceserver/myauth/manage.py collectstatic --noinput
 
-# Load the SDE (skip if corptools already loaded it; runs via Celery)
+# Load the SDE (skip if another app already loaded it; runs via Celery)
 python /home/allianceserver/myauth/manage.py esde_load_sde
 
 # Restart Auth
@@ -92,7 +93,7 @@ In the Docker variant of Auth, the app is installed via the requirements
 of the Auth image. Add to `conf/requirements.txt`:
 
 ```
-aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.3.0
+aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.4.1
 ```
 
 The `local.py` entries are identical to the bare metal installation
@@ -108,7 +109,7 @@ docker compose exec allianceauth_gunicorn bash
 # inside the container:
 auth migrate
 auth collectstatic --noinput
-# Skip the next line if corptools already loaded the SDE
+# Skip the next line if another app already loaded the SDE
 auth esde_load_sde
 ```
 
@@ -164,6 +165,8 @@ aa-swift-drift/
     ├── admin.py                Django admin
     ├── migrations/
     │   └── 0001_initial.py     Database schema
+    ├── static/swiftdrift/img/
+    │   └── happydrifter.png    App mascot shown in the footer
     └── templates/swiftdrift/
         ├── base.html           Base layout + autocomplete script
         ├── index.html          Overview

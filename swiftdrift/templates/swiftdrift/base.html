@@ -1,4 +1,5 @@
 {% extends "allianceauth/base-bs5.html" %}
+{% load static %}
 {% comment %}
 Base template of the app.
 Inherits from the Bootstrap 5 base layout of Alliance Auth so the app
@@ -38,6 +39,19 @@ automatically picks up the active theme of the installation.
 
         {# Content of the respective sub page #}
         {% block drifters_content %}{% endblock %}
+
+        {% comment %}
+        App mascot: a happy drifter greets from the bottom of every page.
+        Kept small and slightly transparent so it stays a fun detail and
+        does not compete with the actual content.
+        {% endcomment %}
+        <div class="text-center mt-4 mb-2">
+            <img src="{% static 'swiftdrift/img/happydrifter.png' %}"
+                 alt="A happy drifter"
+                 title="The drifters are pleased with your tracking efforts."
+                 style="max-height: 110px; opacity: 0.85;">
+            <p class="text-muted small mt-1 mb-0">Fly safe. The hive is watching. o7</p>
+        </div>
 
     </div>
 

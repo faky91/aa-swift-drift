@@ -11,6 +11,33 @@ clicking a header sorts by that column, clicking again reverses.
             <h5 class="card-title">Active drifter wormholes</h5>
 
             {% if wormholes %}
+                {% comment %}
+                Filter bar: free-text search on system name plus dropdowns
+                for region and hive. Filtering happens client-side in JS,
+                the dropdowns are populated from the visible table rows.
+                {% endcomment %}
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <input type="text"
+                               id="filter-system"
+                               class="form-control"
+                               placeholder="Filter by system..."
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-3">
+                        <select id="filter-region" class="form-select">
+                            <option value="">All regions</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="filter-hive" class="form-select">
+                            <option value="">All hives</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center">
+                        <span class="text-muted small" id="filter-count"></span>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover align-middle" id="wormhole-table">
                         <thead>
@@ -40,8 +67,10 @@ clicking a header sorts by that column, clicking again reverses.
                                         {% endif %}
                                     </td>
                                     <td>{{ wh.get_hive_display }}</td>
-                                    {# data-sort provides a machine-readable sort key where
-                                       the visible text is not sortable (badges, dates) #}
+                                    {% comment %}
+                                    data-sort provides a machine-readable sort key where
+                                    the visible text is not sortable (badges, dates)
+                                    {% endcomment %}
                                     <td data-sort="{{ wh.mass_status }}">
                                         {% if wh.mass_status == "fresh" %}
                                             <span class="badge bg-success">{{ wh.get_mass_status_display }}</span>
@@ -106,7 +135,7 @@ clicking a header sorts by that column, clicking again reverses.
     </div>
 
     {# ------------------------------------------------------------------ #}
-    {# Client-side table sorting.                                          #}
+    {# Client-side table sorting and filtering.                            #}
     {# Click a header marked with data-sortable to sort by that column,    #}
     {# click again to reverse. Cells may provide a data-sort attribute     #}
     {# as sort key; otherwise the visible text is used. Numeric values     #}
@@ -122,6 +151,16 @@ clicking a header sorts by that column, clicking again reverses.
             }
             const headers = table.querySelectorAll("th[data-sortable]");
             const tbody = table.querySelector("tbody");
+            const allRows = Array.from(tbody.rows);
+
+            // Column indexes used by the filters (must match the <th> order)
+            const COL_SYSTEM = 0;
+            const COL_REGION = 1;
+            const COL_HIVE = 2;
+
+            // ----------------------------------------------------------
+            // Sorting
+            // ----------------------------------------------------------
 
             // Read the sort key of a cell: data-sort wins over visible text
             function cellKey(row, columnIndex) {
@@ -170,6 +209,68 @@ clicking a header sorts by that column, clicking again reverses.
                     });
                 });
             });
+
+            // ----------------------------------------------------------
+            // Filtering
+            // ----------------------------------------------------------
+
+            const systemInput = document.getElementById("filter-system");
+            const regionSelect = document.getElementById("filter-region");
+            const hiveSelect = document.getElementById("filter-hive");
+            const countLabel = document.getElementById("filter-count");
+
+            // Populate a dropdown with the distinct values of one column
+            function populateSelect(select, columnIndex) {
+                const values = new Set();
+                allRows.forEach(function (row) {
+                    const text = row.cells[columnIndex].textContent.trim();
+                    if (text && text !== "\u2013") {
+                        values.add(text);
+                    }
+                });
+                Array.from(values).sort().forEach(function (value) {
+                    const option = document.createElement("option");
+                    option.value = value;
+                    option.textContent = value;
+                    select.appendChild(option);
+                });
+            }
+            populateSelect(regionSelect, COL_REGION);
+            populateSelect(hiveSelect, COL_HIVE);
+
+            // Show/hide rows based on all active filters at once
+            function applyFilters() {
+                const systemQuery = systemInput.value.trim().toLowerCase();
+                const regionValue = regionSelect.value;
+                const hiveValue = hiveSelect.value;
+                let visible = 0;
+
+                allRows.forEach(function (row) {
+                    const system = row.cells[COL_SYSTEM].textContent.trim().toLowerCase();
+                    const region = row.cells[COL_REGION].textContent.trim();
+                    const hive = row.cells[COL_HIVE].textContent.trim();
+
+                    const matches =
+                        (!systemQuery || system.includes(systemQuery)) &&
+                        (!regionValue || region === regionValue) &&
+                        (!hiveValue || hive === hiveValue);
+
+                    row.style.display = matches ? "" : "none";
+                    if (matches) {
+                        visible += 1;
+                    }
+                });
+
+                countLabel.textContent =
+                    visible === allRows.length
+                        ? allRows.length + " entries"
+                        : visible + " of " + allRows.length + " entries";
+            }
+
+            systemInput.addEventListener("input", applyFilters);
+            regionSelect.addEventListener("change", applyFilters);
+            hiveSelect.addEventListener("change", applyFilters);
+            applyFilters();
         });
     </script>
 {% endblock %}

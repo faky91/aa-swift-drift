@@ -162,13 +162,13 @@ class DrifterWormhole(models.Model):
 
         # Default: creation time + maximum lifetime
         expires = created + datetime.timedelta(
-            hours=app_settings.DRIFTERS_DEFAULT_LIFETIME_HOURS
+            hours=app_settings.SWIFTDRIFT_DEFAULT_LIFETIME_HOURS
         )
 
         # EOL caps the remaining lifetime at X hours
         if self.eol and self.eol_at:
             eol_expires = self.eol_at + datetime.timedelta(
-                hours=app_settings.DRIFTERS_EOL_LIFETIME_HOURS
+                hours=app_settings.SWIFTDRIFT_EOL_LIFETIME_HOURS
             )
             expires = min(expires, eol_expires)
 

@@ -274,6 +274,7 @@ def _status_of(wormhole) -> dict:
         "percent": wormhole.freshness_percent,
         "eol": wormhole.eol,
         "size": wormhole.size.upper() if wormhole.size else "",
+        "type": wormhole.wh_type_code,
         "up": 0,
         "down": 0,
     }

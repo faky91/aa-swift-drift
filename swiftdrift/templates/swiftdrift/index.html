@@ -106,7 +106,11 @@ clicking a header sorts by that column, clicking again reverses.
                                     </td>
                                     <td>
                                         {% if wh.hive == "normal" %}
-                                            Normal
+                                            {% if wh.wh_type_code %}
+                                                <span title="{{ wh.type_summary }}">{{ wh.wh_type_code }}</span>
+                                            {% else %}
+                                                Normal
+                                            {% endif %}
                                             {% if wh.size %}
                                                 <br><small class="text-muted">Size: {{ wh.size|upper }}</small>
                                             {% endif %}

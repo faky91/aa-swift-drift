@@ -10,6 +10,7 @@ from django import forms
 
 from eve_sde.models import SolarSystem
 
+from . import wh_types
 from .models import DrifterWormhole
 
 # K-space systems have IDs from 30000000 to 30999999.
@@ -37,6 +38,21 @@ def resolve_kspace_system(name: str) -> SolarSystem:
         )
 
 
+def resolve_any_system(name: str) -> SolarSystem:
+    """
+    Resolve a system name to a SolarSystem object, including J-space
+    wormhole systems (J-numbers, Thera). Used for the route search and
+    the destination of normal wormholes; the reported side of an entry
+    stays k-space, since that is where this tracker operates.
+    """
+    try:
+        return SolarSystem.objects.get(name__iexact=name.strip())
+    except SolarSystem.DoesNotExist:
+        raise forms.ValidationError(
+            f"System '{name}' not found. Please enter a valid system name."
+        )
+
+
 class WormholeForm(forms.Form):
     """Form for reporting and editing a drifter wormhole."""
 
@@ -57,6 +73,21 @@ class WormholeForm(forms.Form):
         label="Wormhole",
         choices=DrifterWormhole.Hive.choices,
         widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    wh_type = forms.CharField(
+        label="Wormhole type",
+        required=False,
+        max_length=6,
+        help_text="Normal wormholes only: the in-game type code. "
+                  "Known codes auto-fill size and lifetime.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. B274 or K162",
+                "autocomplete": "off",
+                "list": "wh-type-list",
+            }
+        ),
     )
     destination_name = forms.CharField(
         label="Destination system",
@@ -79,10 +110,10 @@ class WormholeForm(forms.Form):
         help_text="Normal wormholes only: the in-game ship size limit.",
         widget=forms.Select(attrs={"class": "form-select"}),
     )
-    lifetime_hours = forms.IntegerField(
+    lifetime_hours = forms.FloatField(
         label="Lifetime (hours)",
         required=False,
-        min_value=1,
+        min_value=0.5,
         max_value=72,
         help_text="Optional, defaults to 16h. Mainly for normal wormholes.",
         widget=forms.NumberInput(
@@ -140,6 +171,23 @@ class WormholeForm(forms.Form):
         hive = cleaned.get("hive")
 
         if hive == DrifterWormhole.Hive.NORMAL:
+            # Type code: validate against the catalog and auto-fill
+            # size/lifetime where the user left them empty. A manual
+            # lifetime always wins over the catalog value.
+            code = (cleaned.get("wh_type") or "").strip().upper()
+            if code:
+                if wh_types.get_type(code) is None:
+                    self.add_error(
+                        "wh_type",
+                        f"Unknown wormhole type '{code}'.",
+                    )
+                else:
+                    cleaned["wh_type"] = code
+                    if not cleaned.get("size"):
+                        cleaned["size"] = wh_types.size_for(code)
+                    if not cleaned.get("lifetime_hours"):
+                        cleaned["lifetime_hours"] = wh_types.lifetime_for(code)
+
             destination_name = (cleaned.get("destination_name") or "").strip()
             if not destination_name:
                 self.add_error(
@@ -147,7 +195,7 @@ class WormholeForm(forms.Form):
                     "Normal wormholes need a destination system.",
                 )
             else:
-                destination = resolve_kspace_system(destination_name)
+                destination = resolve_any_system(destination_name)
                 system = cleaned.get("system")
                 if system and destination.id == system.id:
                     self.add_error(
@@ -157,6 +205,7 @@ class WormholeForm(forms.Form):
                 else:
                     cleaned["destination_system"] = destination
         else:
+            cleaned["wh_type"] = ""
             cleaned["destination_system"] = None
             cleaned["lifetime_hours"] = None
             cleaned["size"] = ""
@@ -212,12 +261,12 @@ class RouteForm(forms.Form):
 
     def clean_start_name(self):
         name = self.cleaned_data["start_name"]
-        self.cleaned_data["start_system"] = resolve_kspace_system(name)
+        self.cleaned_data["start_system"] = resolve_any_system(name)
         return name
 
     def clean_dest_name(self):
         name = self.cleaned_data["dest_name"]
-        self.cleaned_data["dest_system"] = resolve_kspace_system(name)
+        self.cleaned_data["dest_system"] = resolve_any_system(name)
         return name
 
 

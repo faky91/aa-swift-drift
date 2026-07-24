@@ -314,3 +314,72 @@ class StatusReportTests(SwiftDriftTestBase):
         )
         wormhole.delete()
         self.assertEqual(WormholeStatusReport.objects.count(), 0)
+
+
+class WhTypeCatalogTests(SwiftDriftTestBase):
+    """Sanity of the bundled type catalog and the form auto-fill."""
+
+    def test_catalog_values(self):
+        from . import wh_types
+
+        self.assertGreaterEqual(len(wh_types.WH_TYPES), 90)
+        self.assertEqual(wh_types.lifetime_for("B274"), 24)
+        self.assertEqual(wh_types.size_for("B274"), "l")
+        self.assertEqual(wh_types.size_for("E004"), "s")
+        self.assertIsNone(wh_types.lifetime_for("K162"))
+
+    def test_form_autofills_from_type_code(self):
+        from .forms import WormholeForm
+
+        form = WormholeForm(
+            data={
+                "system_name": "Alpha",
+                "hive": "normal",
+                "wh_type": "b274",
+                "destination_name": "Bravo",
+                "mass_status": "fresh",
+            }
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["wh_type"], "B274")
+        self.assertEqual(form.cleaned_data["size"], "l")
+        self.assertEqual(form.cleaned_data["lifetime_hours"], 24)
+
+    def test_manual_lifetime_overrides_catalog(self):
+        from .forms import WormholeForm
+
+        form = WormholeForm(
+            data={
+                "system_name": "Alpha",
+                "hive": "normal",
+                "wh_type": "B274",
+                "destination_name": "Bravo",
+                "lifetime_hours": "6",
+                "mass_status": "fresh",
+            }
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["lifetime_hours"], 6)
+
+
+class JSpaceRoutingTests(SwiftDriftTestBase):
+    """Normal wormholes may lead to J-space; the route can end there."""
+
+    def test_route_to_jspace_destination(self):
+        jsystem = SolarSystem.objects.create(
+            id=31000001,
+            name="J100001",
+            constellation=self.a.constellation,
+            security_status=-1.0,
+        )
+        DrifterWormhole.objects.create(
+            system=self.c,
+            destination_system=jsystem,
+            hive="normal",
+            wh_type_code="B274",
+            created_by=self.user,
+        )
+        route = find_route(self.a.id, jsystem.id, use_bridges=False)
+        self.assertIsNotNone(route)
+        self.assertEqual(route[-1]["system"].name, "J100001")
+        self.assertEqual(route[-1]["via"], "drifter")

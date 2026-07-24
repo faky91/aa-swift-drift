@@ -31,6 +31,7 @@ from .forms import (
 )
 from .importer import parse_jump_bridges
 from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
+from . import wh_types
 from .routing import find_route
 
 # django-esi v9 removed the generated Swagger client (esi.clients), so we
@@ -75,6 +76,18 @@ def index(request):
     return render(request, "swiftdrift/index.html", context)
 
 
+def _wh_type_map() -> dict:
+    """Catalog as a JS-friendly map for client-side auto-fill."""
+    return {
+        code: {
+            "size": wh_types.size_for(code),
+            "lifetime": wh_types.lifetime_for(code),
+            "summary": wh_types.summary_for(code),
+        }
+        for code in wh_types.WH_TYPES
+    }
+
+
 @login_required
 @permission_required("swiftdrift.edit_access")
 def add(request):
@@ -86,6 +99,7 @@ def add(request):
                 system=form.cleaned_data["system"],
                 hive=form.cleaned_data["hive"],
                 destination_system=form.cleaned_data["destination_system"],
+                wh_type_code=form.cleaned_data["wh_type"],
                 size=form.cleaned_data["size"],
                 lifetime_hours=form.cleaned_data["lifetime_hours"],
                 mass_status=form.cleaned_data["mass_status"],
@@ -101,7 +115,12 @@ def add(request):
     else:
         form = WormholeForm()
 
-    context = {"form": form, "title": "Report wormhole"}
+    context = {
+        "form": form,
+        "title": "Report wormhole",
+        "wh_type_options": wh_types.choices(),
+        "wh_type_map": _wh_type_map(),
+    }
     return render(request, "swiftdrift/form.html", context)
 
 
@@ -117,6 +136,7 @@ def edit(request, pk: int):
             wormhole.system = form.cleaned_data["system"]
             wormhole.hive = form.cleaned_data["hive"]
             wormhole.destination_system = form.cleaned_data["destination_system"]
+            wormhole.wh_type_code = form.cleaned_data["wh_type"]
             wormhole.size = form.cleaned_data["size"]
             wormhole.lifetime_hours = form.cleaned_data["lifetime_hours"]
             wormhole.mass_status = form.cleaned_data["mass_status"]
@@ -138,6 +158,7 @@ def edit(request, pk: int):
                     if wormhole.destination_system
                     else ""
                 ),
+                "wh_type": wormhole.wh_type_code,
                 "size": wormhole.size,
                 "lifetime_hours": wormhole.lifetime_hours,
                 "mass_status": wormhole.mass_status,
@@ -147,7 +168,12 @@ def edit(request, pk: int):
             }
         )
 
-    context = {"form": form, "title": f"Edit wormhole: {wormhole.system.name}"}
+    context = {
+        "form": form,
+        "title": f"Edit wormhole: {wormhole.system.name}",
+        "wh_type_options": wh_types.choices(),
+        "wh_type_map": _wh_type_map(),
+    }
     return render(request, "swiftdrift/form.html", context)
 
 
@@ -555,12 +581,10 @@ def system_search(request):
     query = request.GET.get("q", "").strip()
     names = []
     if len(query) >= 2:  # only search from 2 characters onwards
+        # K-space and J-space (route search and normal-wormhole
+        # destinations may target wormhole systems like J123456)
         names = list(
-            SolarSystem.objects.filter(
-                name__istartswith=query,
-                id__gte=KSPACE_MIN_ID,
-                id__lt=KSPACE_MAX_ID,
-            )
+            SolarSystem.objects.filter(name__istartswith=query)
             .order_by("name")
             .values_list("name", flat=True)[:10]
         )

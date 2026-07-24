@@ -35,7 +35,7 @@ Run all commands inside the venv of the Auth installation
 source /home/allianceserver/venv/auth/bin/activate
 
 # 2. Install the app (from a git repo, or from PyPI if published)
-pip install git+https://github.com/faky91/aa-swift-drift.git@v0.13.0
+pip install git+https://github.com/faky91/aa-swift-drift.git@v0.14.0
 # alternatively from a local checkout:
 # pip install /path/to/aa-swift-drift
 ```
@@ -93,7 +93,7 @@ In the Docker variant of Auth, the app is installed via the requirements
 of the Auth image. Add to `conf/requirements.txt`:
 
 ```
-aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.13.0
+aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.14.0
 ```
 
 The `local.py` entries are identical to the bare metal installation
@@ -126,6 +126,16 @@ of your Auth installation at https://developers.eveonline.com
 Without the scope, the SSO authorization for the button will fail.
 No changes to local.py are required; django-esi requests the scope
 on first use.
+
+## Wormhole type catalog
+
+Normal wormholes can be reported with their in-game type code (e.g.
+B274). Size and lifetime are then auto-filled from a bundled static
+catalog based on the EVE University Wiki "Wormhole attributes" page
+(CC BY-SA 4.0), cross-checked against ellatha.com. A manually entered
+lifetime always overrides the catalog value. Route search and normal
+wormhole destinations accept J-space system names (e.g. J123456,
+Thera) in addition to k-space.
 
 ## Permissions
 

@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from eve_sde.models import SolarSystem
 
-from . import app_settings
+from . import app_settings, wh_types
 
 
 class General(models.Model):
@@ -116,6 +116,15 @@ class DrifterWormhole(models.Model):
         verbose_name="Destination system",
     )
 
+    # In-game wormhole type code (normal wormholes), e.g. "B274" or "K162".
+    # Stats for known codes come from the bundled catalog (wh_types.py).
+    wh_type_code = models.CharField(
+        max_length=6,
+        blank=True,
+        default="",
+        verbose_name="Wormhole type",
+    )
+
     # Ship size limit (normal wormholes; drifter holes are always the same)
     size = models.CharField(
         max_length=2,
@@ -127,7 +136,7 @@ class DrifterWormhole(models.Model):
 
     # Optional lifetime override in hours (mainly for normal wormholes,
     # e.g. 24h or 48h holes). Empty = app default (16h).
-    lifetime_hours = models.PositiveSmallIntegerField(
+    lifetime_hours = models.FloatField(
         null=True,
         blank=True,
         verbose_name="Lifetime (hours)",
@@ -227,6 +236,11 @@ class DrifterWormhole(models.Model):
 
         self.expires_at = expires
         super().save(*args, **kwargs)
+
+    @property
+    def type_summary(self) -> str:
+        """Catalog stats of the type code, for tooltips. Empty if unknown."""
+        return wh_types.summary_for(self.wh_type_code)
 
     @property
     def freshness_percent(self) -> int:

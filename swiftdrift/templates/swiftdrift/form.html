@@ -43,6 +43,21 @@ The only difference is the title and the pre-filled values.
                     script below shows them only when "Normal wormhole"
                     is selected.
                     {% endcomment %}
+                    <div class="col-md-3" id="wh-type-field">
+                        <label class="form-label" for="{{ form.wh_type.id_for_label }}">
+                            {{ form.wh_type.label }}
+                        </label>
+                        {{ form.wh_type }}
+                        <datalist id="wh-type-list">
+                            {% for code, label in wh_type_options %}
+                                <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </datalist>
+                        <div class="form-text" id="wh-type-summary">{{ form.wh_type.help_text }}</div>
+                        {% for error in form.wh_type.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
                     <div class="col-md-6" id="destination-field">
                         <label class="form-label" for="{{ form.destination_name.id_for_label }}">
                             {{ form.destination_name.label }}
@@ -118,6 +133,7 @@ The only difference is the title and the pre-filled values.
             </form>
         </div>
     </div>
+    {{ wh_type_map|json_script:"wh-types-data" }}
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             "use strict";
@@ -126,9 +142,11 @@ The only difference is the title and the pre-filled values.
             const destinationField = document.getElementById("destination-field");
             const lifetimeField = document.getElementById("lifetime-field");
             const sizeField = document.getElementById("size-field");
+            const typeField = document.getElementById("wh-type-field");
 
             function toggleNormalFields() {
                 const isNormal = hiveSelect.value === "normal";
+                typeField.style.display = isNormal ? "" : "none";
                 destinationField.style.display = isNormal ? "" : "none";
                 lifetimeField.style.display = isNormal ? "" : "none";
                 sizeField.style.display = isNormal ? "" : "none";
@@ -136,6 +154,37 @@ The only difference is the title and the pre-filled values.
 
             hiveSelect.addEventListener("change", toggleNormalFields);
             toggleNormalFields();
+
+            // ------------------------------------------------------
+            // Type code auto-fill: a known code fills size and
+            // lifetime from the bundled catalog. Manual entries are
+            // kept: the fields are only set when currently empty,
+            // and a manual lifetime always overrides the catalog.
+            // ------------------------------------------------------
+            const typeInput = document.getElementById("{{ form.wh_type.id_for_label }}");
+            const typeSummary = document.getElementById("wh-type-summary");
+            const sizeSelect = document.getElementById("{{ form.size.id_for_label }}");
+            const lifetimeInput = document.getElementById("{{ form.lifetime_hours.id_for_label }}");
+            const typeMap = JSON.parse(document.getElementById("wh-types-data").textContent);
+
+            function applyTypeInfo() {
+                const info = typeMap[typeInput.value.trim().toUpperCase()];
+                if (!info) {
+                    typeSummary.textContent = "{{ form.wh_type.help_text|escapejs }}";
+                    return;
+                }
+                typeSummary.textContent = info.summary;
+                if (info.size && !sizeSelect.value) {
+                    sizeSelect.value = info.size;
+                }
+                if (info.lifetime && !lifetimeInput.value) {
+                    lifetimeInput.value = info.lifetime;
+                }
+            }
+
+            typeInput.addEventListener("change", applyTypeInfo);
+            typeInput.addEventListener("input", applyTypeInfo);
+            applyTypeInfo();
         });
     </script>
 {% endblock %}

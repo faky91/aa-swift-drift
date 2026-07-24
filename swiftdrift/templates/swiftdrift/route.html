@@ -11,7 +11,7 @@ The form uses GET so routes are shareable as URLs
     bothered. Text approved by the app owner.
     {% endcomment %}
     <div class="mb-3">
-        <button class="btn btn-sm btn-outline-secondary"
+        <button class="btn btn-sm btn-secondary"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#route-howto">
@@ -141,7 +141,7 @@ The form uses GET so routes are shareable as URLs
                                             <span class="badge bg-secondary"><i class="fa-solid fa-circle-notch"></i> Exit {{ step.hive|capfirst }}</span>
                                             {% if step.exit_status %}
                                                 <br><small class="text-muted">Status:
-                                                    <span class="{% if step.exit_status.percent >= 60 %}text-success{% elif step.exit_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.exit_status.percent }}%</span>{% if step.exit_status.size %} &middot; {{ step.exit_status.size }}{% endif %}{% if step.exit_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
+                                                    <span class="{% if step.exit_status.percent >= 60 %}text-success{% elif step.exit_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.exit_status.percent }}%</span>{% if step.exit_status.type %} &middot; {{ step.exit_status.type }}{% endif %}{% if step.exit_status.size %} &middot; {{ step.exit_status.size }}{% endif %}{% if step.exit_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
                                                     &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.exit_status.up }}
                                                     <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.exit_status.down }}
                                                 </small>
@@ -154,7 +154,7 @@ The form uses GET so routes are shareable as URLs
                                             <br><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter {{ step.enter_hive|capfirst }} here</span>
                                             {% if step.enter_status %}
                                                 <br><small class="text-muted">Status:
-                                                    <span class="{% if step.enter_status.percent >= 60 %}text-success{% elif step.enter_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.enter_status.percent }}%</span>{% if step.enter_status.size %} &middot; {{ step.enter_status.size }}{% endif %}{% if step.enter_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
+                                                    <span class="{% if step.enter_status.percent >= 60 %}text-success{% elif step.enter_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.enter_status.percent }}%</span>{% if step.enter_status.type %} &middot; {{ step.enter_status.type }}{% endif %}{% if step.enter_status.size %} &middot; {{ step.enter_status.size }}{% endif %}{% if step.enter_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
                                                     &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.enter_status.up }}
                                                     <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.enter_status.down }}
                                                 </small>
@@ -205,11 +205,18 @@ The form uses GET so routes are shareable as URLs
                         {% if form.use_normal_wh.value %}<input type="hidden" name="use_normal_wh" value="on">{% endif %}
                         {% if form.use_bridges.value %}<input type="hidden" name="use_bridges" value="on">{% endif %}
                         <input type="hidden" name="avoid" value="{{ avoid_next }}">
-                        <button type="submit" class="btn btn-outline-secondary">
+                        <button type="submit" class="btn btn-secondary">
                             <i class="fa-solid fa-shuffle"></i>
                             Find alternative route (avoid these wormholes)
                         </button>
                     </form>
+                {% endif %}
+                {% if avoided_count and not route_uses_wormholes %}
+                    <div class="alert alert-warning py-2 mb-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        This alternative uses <strong>no wormholes</strong> &ndash;
+                        it is a plain gate-to-gate route.
+                    </div>
                 {% endif %}
                 {% if avoided_count %}
                     <p class="text-muted small mb-2">

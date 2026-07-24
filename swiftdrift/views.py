@@ -25,7 +25,7 @@ def index(request):
     """Overview of all active drifter wormholes."""
     wormholes = (
         DrifterWormhole.active()
-        .select_related("system", "created_by", "updated_by")
+        .select_related("system__constellation__region", "created_by", "updated_by")
         .order_by("system__name")
     )
     context = {

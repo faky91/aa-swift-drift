@@ -1,6 +1,8 @@
 {% extends "swiftdrift/base.html" %}
 {% comment %}
 Overview of all active drifter wormholes as a Bootstrap table.
+Columns are sortable client-side (vanilla JS, no extra dependencies):
+clicking a header sorts by that column, clicking again reverses.
 {% endcomment %}
 
 {% block drifters_content %}
@@ -10,16 +12,18 @@ Overview of all active drifter wormholes as a Bootstrap table.
 
             {% if wormholes %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover align-middle">
+                    <table class="table table-striped table-hover align-middle" id="wormhole-table">
                         <thead>
                             <tr>
-                                <th>System</th>
-                                <th>Hive</th>
-                                <th>Mass</th>
-                                <th>EOL</th>
+                                {# data-sortable marks a column as sortable for the script #}
+                                <th data-sortable class="cursor-pointer">System</th>
+                                <th data-sortable class="cursor-pointer">Region</th>
+                                <th data-sortable class="cursor-pointer">Hive</th>
+                                <th data-sortable class="cursor-pointer">Mass</th>
+                                <th data-sortable class="cursor-pointer">EOL</th>
                                 <th>Notes</th>
-                                <th>Reported by</th>
-                                <th>Expires</th>
+                                <th data-sortable class="cursor-pointer">Reported by</th>
+                                <th data-sortable class="cursor-pointer">Expires</th>
                                 {% if can_edit %}<th class="text-end">Actions</th>{% endif %}
                             </tr>
                         </thead>
@@ -27,9 +31,18 @@ Overview of all active drifter wormholes as a Bootstrap table.
                             {% for wh in wormholes %}
                                 <tr>
                                     <td><strong>{{ wh.system.name }}</strong></td>
-                                    <td>{{ wh.get_hive_display }}</td>
                                     <td>
-                                        {# Color-coded mass status #}
+                                        {# Region via constellation; nullable in the SDE models #}
+                                        {% if wh.system.constellation and wh.system.constellation.region %}
+                                            {{ wh.system.constellation.region.name }}
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ wh.get_hive_display }}</td>
+                                    {# data-sort provides a machine-readable sort key where
+                                       the visible text is not sortable (badges, dates) #}
+                                    <td data-sort="{{ wh.mass_status }}">
                                         {% if wh.mass_status == "fresh" %}
                                             <span class="badge bg-success">{{ wh.get_mass_status_display }}</span>
                                         {% elif wh.mass_status == "reduced" %}
@@ -38,7 +51,7 @@ Overview of all active drifter wormholes as a Bootstrap table.
                                             <span class="badge bg-danger">{{ wh.get_mass_status_display }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td data-sort="{{ wh.eol|yesno:'1,0' }}">
                                         {% if wh.eol %}
                                             <span class="badge bg-danger">EOL</span>
                                         {% else %}
@@ -46,11 +59,11 @@ Overview of all active drifter wormholes as a Bootstrap table.
                                         {% endif %}
                                     </td>
                                     <td>{{ wh.notes|default:"" }}</td>
-                                    <td>
+                                    <td data-sort="{{ wh.created_by|default:'zzz' }}">
                                         {{ wh.created_by|default:"unknown" }}<br>
                                         <small class="text-muted">{{ wh.created_at|date:"Y-m-d H:i" }}</small>
                                     </td>
-                                    <td>
+                                    <td data-sort="{{ wh.expires_at|date:'U' }}">
                                         {{ wh.expires_at|date:"Y-m-d H:i" }}<br>
                                         <small class="text-muted">in {{ wh.expires_at|timeuntil }}</small>
                                     </td>
@@ -61,7 +74,6 @@ Overview of all active drifter wormholes as a Bootstrap table.
                                                title="Edit">
                                                 <i class="fa-solid fa-pen"></i>
                                             </a>
-                                            {# Deleting is restricted to the creator or admins #}
                                             {% if can_manage or wh.created_by_id == request.user.id %}
                                                 <form method="post"
                                                       action="{% url 'swiftdrift:delete' wh.pk %}"
@@ -92,4 +104,72 @@ Overview of all active drifter wormholes as a Bootstrap table.
             {% endif %}
         </div>
     </div>
+
+    {# ------------------------------------------------------------------ #}
+    {# Client-side table sorting.                                          #}
+    {# Click a header marked with data-sortable to sort by that column,    #}
+    {# click again to reverse. Cells may provide a data-sort attribute     #}
+    {# as sort key; otherwise the visible text is used. Numeric values     #}
+    {# are compared as numbers, everything else case-insensitively.        #}
+    {# ------------------------------------------------------------------ #}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            "use strict";
+
+            const table = document.getElementById("wormhole-table");
+            if (!table) {
+                return;
+            }
+            const headers = table.querySelectorAll("th[data-sortable]");
+            const tbody = table.querySelector("tbody");
+
+            // Read the sort key of a cell: data-sort wins over visible text
+            function cellKey(row, columnIndex) {
+                const cell = row.cells[columnIndex];
+                if (!cell) {
+                    return "";
+                }
+                const explicit = cell.getAttribute("data-sort");
+                return (explicit !== null ? explicit : cell.textContent).trim().toLowerCase();
+            }
+
+            headers.forEach(function (header) {
+                header.addEventListener("click", function () {
+                    const columnIndex = header.cellIndex;
+
+                    // Toggle direction: asc on first click, then flip
+                    const ascending = header.getAttribute("data-dir") !== "asc";
+
+                    // Reset indicators on all headers, then mark this one
+                    headers.forEach(function (h) {
+                        h.removeAttribute("data-dir");
+                        h.innerHTML = h.innerHTML.replace(/ [\u25B2\u25BC]$/, "");
+                    });
+                    header.setAttribute("data-dir", ascending ? "asc" : "desc");
+                    header.innerHTML += ascending ? " \u25B2" : " \u25BC";
+
+                    // Sort the rows and re-attach them in the new order
+                    const rows = Array.from(tbody.rows);
+                    rows.sort(function (a, b) {
+                        const keyA = cellKey(a, columnIndex);
+                        const keyB = cellKey(b, columnIndex);
+
+                        // Compare numerically when both keys are numbers
+                        const numA = parseFloat(keyA);
+                        const numB = parseFloat(keyB);
+                        let result;
+                        if (!isNaN(numA) && !isNaN(numB)) {
+                            result = numA - numB;
+                        } else {
+                            result = keyA.localeCompare(keyB);
+                        }
+                        return ascending ? result : -result;
+                    });
+                    rows.forEach(function (row) {
+                        tbody.appendChild(row);
+                    });
+                });
+            });
+        });
+    </script>
 {% endblock %}

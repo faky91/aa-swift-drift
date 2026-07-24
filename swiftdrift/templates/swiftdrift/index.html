@@ -104,7 +104,16 @@ clicking a header sorts by that column, clicking again reverses.
                                             <span class="text-muted">–</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ wh.get_hive_display }}</td>
+                                    <td>
+                                        {% if wh.hive == "normal" %}
+                                            Normal
+                                            {% if wh.size %}
+                                                <br><small class="text-muted">Size: {{ wh.size|upper }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            {{ wh.get_hive_display }}
+                                        {% endif %}
+                                    </td>
                                     {% comment %}
                                     data-sort provides a machine-readable sort key where
                                     the visible text is not sortable (badges, dates)
@@ -149,7 +158,7 @@ clicking a header sorts by that column, clicking again reverses.
                                         the reports of the last hour.
                                         {% endcomment %}
                                         <div class="d-flex align-items-center gap-2 mt-1 small"
-                                             title="Pilot reports in the last hour">
+                                             title="Pilot reports for this wormhole">
                                             <form method="post" action="{% url 'swiftdrift:vote' wh.pk %}" class="d-inline">
                                                 {% csrf_token %}
                                                 <input type="hidden" name="direction" value="up">
@@ -157,7 +166,7 @@ clicking a header sorts by that column, clicking again reverses.
                                                 <button type="submit"
                                                         class="btn btn-link btn-sm p-0 text-success text-decoration-none"
                                                         title="Confirm: still open">
-                                                    <i class="fa-solid fa-thumbs-up"></i> {{ wh.up_hour }}
+                                                    <i class="fa-solid fa-thumbs-up"></i> {{ wh.up_votes }}
                                                 </button>
                                             </form>
                                             <form method="post" action="{% url 'swiftdrift:vote' wh.pk %}" class="d-inline">
@@ -167,10 +176,10 @@ clicking a header sorts by that column, clicking again reverses.
                                                 <button type="submit"
                                                         class="btn btn-link btn-sm p-0 text-danger text-decoration-none"
                                                         title="Report: wormhole is gone">
-                                                    <i class="fa-solid fa-thumbs-down"></i> {{ wh.down_hour }}
+                                                    <i class="fa-solid fa-thumbs-down"></i> {{ wh.down_votes }}
                                                 </button>
                                             </form>
-                                            <span class="text-muted">last hour</span>
+                                            <span class="text-muted">pilot reports</span>
                                         </div>
                                     </td>
                                     <td>

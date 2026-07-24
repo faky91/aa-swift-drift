@@ -59,6 +59,17 @@ class DrifterWormhole(models.Model):
         # two known systems, like a bridge with an expiry date
         NORMAL = "normal", "Normal wormhole"
 
+    class Size(models.TextChoices):
+        """
+        Ship size limit of a wormhole, using the exact in-game wording
+        from the wormhole's show-info window.
+        """
+
+        S = "s", "Only the smallest ships can pass through this wormhole (S)"
+        M = "m", "Up to medium size ships can pass through this wormhole (M)"
+        L = "l", "Larger ships can pass through this wormhole (L)"
+        XL = "xl", "Very large ships can pass through this wormhole (XL)"
+
     class MassStatus(models.TextChoices):
         """Mass state of the wormhole."""
 
@@ -103,6 +114,15 @@ class DrifterWormhole(models.Model):
         null=True,
         blank=True,
         verbose_name="Destination system",
+    )
+
+    # Ship size limit (normal wormholes; drifter holes are always the same)
+    size = models.CharField(
+        max_length=2,
+        choices=Size.choices,
+        blank=True,
+        default="",
+        verbose_name="Size",
     )
 
     # Optional lifetime override in hours (mainly for normal wormholes,

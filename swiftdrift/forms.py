@@ -72,6 +72,13 @@ class WormholeForm(forms.Form):
             }
         ),
     )
+    size = forms.ChoiceField(
+        label="Size",
+        required=False,
+        choices=[("", "Unknown")] + DrifterWormhole.Size.choices,
+        help_text="Normal wormholes only: the in-game ship size limit.",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
     lifetime_hours = forms.IntegerField(
         label="Lifetime (hours)",
         required=False,
@@ -152,6 +159,7 @@ class WormholeForm(forms.Form):
         else:
             cleaned["destination_system"] = None
             cleaned["lifetime_hours"] = None
+            cleaned["size"] = ""
 
         return cleaned
 
@@ -182,6 +190,12 @@ class RouteForm(forms.Form):
                 "data-system-autocomplete": "1",
             }
         ),
+    )
+    use_normal_wh = forms.BooleanField(
+        label="Use normal wormholes",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     use_bridges = forms.BooleanField(
         label="Use jump bridges",

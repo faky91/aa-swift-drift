@@ -14,12 +14,10 @@ The stargate data comes from django-eveonline-sde (eve_sde). The SDE
 must be loaded once for this to work (see README, esde_load_sde).
 """
 
-import datetime
 import heapq
 from collections import defaultdict
 
 from django.core.cache import cache
-from django.utils import timezone
 
 from eve_sde.models import SolarSystem, Stargate
 
@@ -57,7 +55,9 @@ def get_stargate_graph() -> dict:
     return graph
 
 
-def get_wormhole_edges(exclude_ids=None) -> dict:
+def get_wormhole_edges(
+    exclude_ids=None, include_drifters=True, include_normal=True
+) -> dict:
     """
     Build the wormhole edges from the currently active entries.
 
@@ -85,9 +85,9 @@ def get_wormhole_edges(exclude_ids=None) -> dict:
         if wh.id in exclude:
             continue
         if wh.hive == DrifterWormhole.Hive.NORMAL:
-            if wh.destination_system_id:
+            if include_normal and wh.destination_system_id:
                 normals.append(wh)
-        else:
+        elif include_drifters:
             holes[(wh.system_id, wh.hive)] = wh
 
     # Drifter network: connect every pair within the same hive
@@ -120,6 +120,7 @@ def find_route(
     dest_id: int,
     use_drifters: bool = True,
     use_bridges: bool = True,
+    use_normal: bool = True,
     exclude_wormhole_ids=None,
 ):
     """
@@ -133,9 +134,13 @@ def find_route(
          "bridge_name": None | "structure name"}  (bridge steps)
     """
     gates = get_stargate_graph()
-    wormhole_edges = (
-        get_wormhole_edges(exclude_wormhole_ids) if use_drifters else {}
-    )
+    wormhole_edges = {}
+    if use_drifters or use_normal:
+        wormhole_edges = get_wormhole_edges(
+            exclude_wormhole_ids,
+            include_drifters=use_drifters,
+            include_normal=use_normal,
+        )
     wh_weight = app_settings.SWIFTDRIFT_ROUTE_WH_WEIGHT
 
     # Prepare wormhole neighbors per system
@@ -243,7 +248,7 @@ def find_route(
     # is located in the PREVIOUS system. We attach the hive and the
     # in-game bookmark name of the entry and exit wormholes.
     # ------------------------------------------------------------------
-    if use_drifters:
+    if wormhole_edges:
         for index, step in enumerate(steps):
             if step["via"] != "drifter" or index == 0:
                 continue
@@ -268,15 +273,19 @@ def _status_of(wormhole) -> dict:
         "id": wormhole.id,
         "percent": wormhole.freshness_percent,
         "eol": wormhole.eol,
-        "up_hour": 0,
-        "down_hour": 0,
+        "size": wormhole.size.upper() if wormhole.size else "",
+        "up": 0,
+        "down": 0,
     }
 
 
 def _attach_vote_counts(steps) -> None:
     """
-    Fill in the pilot vote counts (last hour) for all wormholes used in
-    the route, with a single query for the whole route.
+    Fill in the pilot vote counts for all wormholes used in the route,
+    with a single query for the whole route. Counts cover the entire
+    lifetime of the entry: votes are one per user (changeable) and are
+    deleted together with the wormhole, so they represent the current
+    standing opinions.
     """
     status_dicts = {}
     for step in steps:
@@ -287,10 +296,9 @@ def _attach_vote_counts(steps) -> None:
     if not status_dicts:
         return
 
-    cutoff = timezone.now() - datetime.timedelta(hours=1)
     votes = WormholeStatusReport.objects.filter(
-        wormhole_id__in=status_dicts.keys(), created_at__gte=cutoff
+        wormhole_id__in=status_dicts.keys()
     ).values_list("wormhole_id", "is_up")
     for wormhole_id, is_up in votes:
         for status in status_dicts[wormhole_id]:
-            status["up_hour" if is_up else "down_hour"] += 1
+            status["up" if is_up else "down"] += 1

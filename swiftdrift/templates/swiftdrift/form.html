@@ -53,6 +53,13 @@ The only difference is the title and the pre-filled values.
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
                     </div>
+                    <div class="col-md-6" id="size-field">
+                        <label class="form-label" for="{{ form.size.id_for_label }}">
+                            {{ form.size.label }}
+                        </label>
+                        {{ form.size }}
+                        <div class="form-text">{{ form.size.help_text }}</div>
+                    </div>
                     <div class="col-md-3" id="lifetime-field">
                         <label class="form-label" for="{{ form.lifetime_hours.id_for_label }}">
                             {{ form.lifetime_hours.label }}
@@ -118,11 +125,13 @@ The only difference is the title and the pre-filled values.
             const hiveSelect = document.getElementById("{{ form.hive.id_for_label }}");
             const destinationField = document.getElementById("destination-field");
             const lifetimeField = document.getElementById("lifetime-field");
+            const sizeField = document.getElementById("size-field");
 
             function toggleNormalFields() {
                 const isNormal = hiveSelect.value === "normal";
                 destinationField.style.display = isNormal ? "" : "none";
                 lifetimeField.style.display = isNormal ? "" : "none";
+                sizeField.style.display = isNormal ? "" : "none";
             }
 
             hiveSelect.addEventListener("change", toggleNormalFields);

@@ -7,15 +7,12 @@ Access control:
 - manage_access: delete any entry
 """
 
-import datetime
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission, User
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 
@@ -50,7 +47,6 @@ WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
 @permission_required("swiftdrift.basic_access")
 def index(request):
     """Overview of all active drifter wormholes."""
-    vote_cutoff = timezone.now() - datetime.timedelta(hours=1)
     wormholes = (
         DrifterWormhole.active()
         .select_related(
@@ -60,19 +56,13 @@ def index(request):
             "updated_by",
         )
         .annotate(
-            up_hour=Count(
+            up_votes=Count(
                 "status_reports",
-                filter=Q(
-                    status_reports__created_at__gte=vote_cutoff,
-                    status_reports__is_up=True,
-                ),
+                filter=Q(status_reports__is_up=True),
             ),
-            down_hour=Count(
+            down_votes=Count(
                 "status_reports",
-                filter=Q(
-                    status_reports__created_at__gte=vote_cutoff,
-                    status_reports__is_up=False,
-                ),
+                filter=Q(status_reports__is_up=False),
             ),
         )
         .order_by("system__name")
@@ -96,6 +86,7 @@ def add(request):
                 system=form.cleaned_data["system"],
                 hive=form.cleaned_data["hive"],
                 destination_system=form.cleaned_data["destination_system"],
+                size=form.cleaned_data["size"],
                 lifetime_hours=form.cleaned_data["lifetime_hours"],
                 mass_status=form.cleaned_data["mass_status"],
                 eol=form.cleaned_data["eol"],
@@ -126,6 +117,7 @@ def edit(request, pk: int):
             wormhole.system = form.cleaned_data["system"]
             wormhole.hive = form.cleaned_data["hive"]
             wormhole.destination_system = form.cleaned_data["destination_system"]
+            wormhole.size = form.cleaned_data["size"]
             wormhole.lifetime_hours = form.cleaned_data["lifetime_hours"]
             wormhole.mass_status = form.cleaned_data["mass_status"]
             wormhole.eol = form.cleaned_data["eol"]
@@ -146,6 +138,7 @@ def edit(request, pk: int):
                     if wormhole.destination_system
                     else ""
                 ),
+                "size": wormhole.size,
                 "lifetime_hours": wormhole.lifetime_hours,
                 "mass_status": wormhole.mass_status,
                 "eol": wormhole.eol,
@@ -204,6 +197,7 @@ def route(request):
             dest_id=form.cleaned_data["dest_system"].id,
             use_drifters=form.cleaned_data["use_drifters"],
             use_bridges=form.cleaned_data["use_bridges"],
+            use_normal=form.cleaned_data["use_normal_wh"],
             exclude_wormhole_ids=avoid_ids,
         )
         if result is None:

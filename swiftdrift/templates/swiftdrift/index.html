@@ -16,6 +16,12 @@ clicking a header sorts by that column, clicking again reverses.
                 for region and hive. Filtering happens client-side in JS,
                 the dropdowns are populated from the visible table rows.
                 {% endcomment %}
+                {% comment %}
+                Region and wormhole filters are multi-select toggles:
+                checking e.g. Barbican AND Sentinel shows entries of both
+                types. data-bs-auto-close="outside" keeps the dropdown
+                open while ticking several boxes.
+                {% endcomment %}
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
                         <input type="text"
@@ -25,14 +31,34 @@ clicking a header sorts by that column, clicking again reverses.
                                autocomplete="off">
                     </div>
                     <div class="col-md-3">
-                        <select id="filter-region" class="form-select">
-                            <option value="">All regions</option>
-                        </select>
+                        <div class="dropdown">
+                            <button type="button"
+                                    class="btn btn-outline-secondary dropdown-toggle w-100"
+                                    id="filter-region-button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside">
+                                All regions
+                            </button>
+                            <ul class="dropdown-menu p-2"
+                                id="filter-region-menu"
+                                style="max-height: 260px; overflow-y: auto;">
+                            </ul>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <select id="filter-hive" class="form-select">
-                            <option value="">All wormholes</option>
-                        </select>
+                        <div class="dropdown">
+                            <button type="button"
+                                    class="btn btn-outline-secondary dropdown-toggle w-100"
+                                    id="filter-hive-button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside">
+                                All wormholes
+                            </button>
+                            <ul class="dropdown-menu p-2"
+                                id="filter-hive-menu"
+                                style="max-height: 260px; overflow-y: auto;">
+                            </ul>
+                        </div>
                     </div>
                     <div class="col-md-2 d-flex align-items-center">
                         <span class="text-muted small" id="filter-count"></span>
@@ -162,6 +188,17 @@ clicking a header sorts by that column, clicking again reverses.
                         </tbody>
                     </table>
                 </div>
+
+                {% comment %}
+                Color legend for the Alive column with a very short
+                disclaimer: the value is an estimate, not a guarantee.
+                {% endcomment %}
+                <div class="d-flex flex-wrap align-items-center gap-3 small text-muted mt-2">
+                    <span><span class="badge bg-success">&nbsp;&nbsp;</span> &ge; 60%</span>
+                    <span><span class="badge bg-warning">&nbsp;&nbsp;</span> 30&ndash;59%</span>
+                    <span><span class="badge bg-danger">&nbsp;&nbsp;</span> &lt; 30%</span>
+                    <span>Estimate only &ndash; a wormhole can already be gone even at a high value.</span>
+                </div>
             {% else %}
                 <p class="text-muted mb-0">
                     No active drifter wormholes reported at the moment.
@@ -254,45 +291,89 @@ clicking a header sorts by that column, clicking again reverses.
             // ----------------------------------------------------------
 
             const systemInput = document.getElementById("filter-system");
-            const regionSelect = document.getElementById("filter-region");
-            const hiveSelect = document.getElementById("filter-hive");
             const countLabel = document.getElementById("filter-count");
 
-            // Populate a dropdown with the distinct values of one column
-            function populateSelect(select, columnIndex) {
+            // Multi-select dropdowns: a Set of checked values per filter.
+            // An empty Set means "no restriction" (show everything).
+            const filters = [
+                {
+                    column: COL_REGION,
+                    menu: document.getElementById("filter-region-menu"),
+                    button: document.getElementById("filter-region-button"),
+                    allLabel: "All regions",
+                    checked: new Set(),
+                },
+                {
+                    column: COL_HIVE,
+                    menu: document.getElementById("filter-hive-menu"),
+                    button: document.getElementById("filter-hive-button"),
+                    allLabel: "All wormholes",
+                    checked: new Set(),
+                },
+            ];
+
+            // Build the checkbox list from the distinct column values
+            filters.forEach(function (filter) {
                 const values = new Set();
                 allRows.forEach(function (row) {
-                    const text = row.cells[columnIndex].textContent.trim();
+                    const text = row.cells[filter.column].textContent.trim();
                     if (text && text !== "\u2013") {
                         values.add(text);
                     }
                 });
                 Array.from(values).sort().forEach(function (value) {
-                    const option = document.createElement("option");
-                    option.value = value;
-                    option.textContent = value;
-                    select.appendChild(option);
+                    const item = document.createElement("li");
+                    const label = document.createElement("label");
+                    label.className = "dropdown-item mb-0 cursor-pointer";
+                    const checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
+                    checkbox.className = "form-check-input me-2";
+                    checkbox.value = value;
+                    checkbox.addEventListener("change", function () {
+                        if (checkbox.checked) {
+                            filter.checked.add(value);
+                        } else {
+                            filter.checked.delete(value);
+                        }
+                        updateButton(filter);
+                        applyFilters();
+                    });
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(value));
+                    item.appendChild(label);
+                    filter.menu.appendChild(item);
                 });
-            }
-            populateSelect(regionSelect, COL_REGION);
-            populateSelect(hiveSelect, COL_HIVE);
+            });
 
-            // Show/hide rows based on all active filters at once
+            // Button caption: "All ...", one value, or "N selected"
+            function updateButton(filter) {
+                const selection = Array.from(filter.checked);
+                if (selection.length === 0) {
+                    filter.button.textContent = filter.allLabel;
+                } else if (selection.length === 1) {
+                    filter.button.textContent = selection[0];
+                } else {
+                    filter.button.textContent = selection.length + " selected";
+                }
+            }
+
+            // Show/hide rows based on all active filters at once.
+            // Within one dropdown the checked values combine as OR,
+            // between the filters (and the text search) as AND.
             function applyFilters() {
                 const systemQuery = systemInput.value.trim().toLowerCase();
-                const regionValue = regionSelect.value;
-                const hiveValue = hiveSelect.value;
                 let visible = 0;
 
                 allRows.forEach(function (row) {
                     const system = row.cells[COL_SYSTEM].textContent.trim().toLowerCase();
-                    const region = row.cells[COL_REGION].textContent.trim();
-                    const hive = row.cells[COL_HIVE].textContent.trim();
+                    let matches = !systemQuery || system.includes(systemQuery);
 
-                    const matches =
-                        (!systemQuery || system.includes(systemQuery)) &&
-                        (!regionValue || region === regionValue) &&
-                        (!hiveValue || hive === hiveValue);
+                    filters.forEach(function (filter) {
+                        if (matches && filter.checked.size > 0) {
+                            const value = row.cells[filter.column].textContent.trim();
+                            matches = filter.checked.has(value);
+                        }
+                    });
 
                     row.style.display = matches ? "" : "none";
                     if (matches) {
@@ -307,8 +388,6 @@ clicking a header sorts by that column, clicking again reverses.
             }
 
             systemInput.addEventListener("input", applyFilters);
-            regionSelect.addEventListener("change", applyFilters);
-            hiveSelect.addEventListener("change", applyFilters);
             applyFilters();
         });
     </script>

@@ -35,7 +35,7 @@ Run all commands inside the venv of the Auth installation
 source /home/allianceserver/venv/auth/bin/activate
 
 # 2. Install the app (from a git repo, or from PyPI if published)
-pip install git+https://github.com/faky91/aa-swift-drift.git@v0.10.1
+pip install git+https://github.com/faky91/aa-swift-drift.git@v0.11.0
 # alternatively from a local checkout:
 # pip install /path/to/aa-swift-drift
 ```
@@ -93,7 +93,7 @@ In the Docker variant of Auth, the app is installed via the requirements
 of the Auth image. Add to `conf/requirements.txt`:
 
 ```
-aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.10.1
+aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.11.0
 ```
 
 The `local.py` entries are identical to the bare metal installation
@@ -183,21 +183,6 @@ aa-swift-drift/
         ├── index.html          Overview
         ├── form.html           Report/edit
         └── route.html          Route search
-```
-
-## Upgrading from 0.1.x (eveuniverse-based)
-
-Version 0.2.0 switched the SDE backend from django-eveuniverse to
-django-eveonline-sde. The wormhole table references the solar system
-model of the backend, so the app tables must be rebuilt once. All
-wormhole entries are short-lived anyway, so nothing of value is lost:
-
-```bash
-# BEFORE upgrading the package: roll back the app tables
-auth migrate swiftdrift zero
-
-# then update the pin in requirements to v0.2.0, rebuild, and:
-auth migrate
 ```
 
 ## License

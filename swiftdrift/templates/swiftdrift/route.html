@@ -21,7 +21,20 @@ The form uses GET so routes are shareable as URLs
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
                     </div>
-                    <div class="col-md-4">
+                    {% comment %}
+                    Swap button: exchanges start and destination and, when
+                    both are filled, immediately recalculates - one click
+                    to plan the way back home.
+                    {% endcomment %}
+                    <div class="col-auto d-flex align-items-end">
+                        <button type="button"
+                                class="btn btn-outline-secondary mb-1"
+                                id="swap-systems"
+                                title="Swap start and destination">
+                            <i class="fa-solid fa-right-left"></i>
+                        </button>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label" for="{{ form.dest_name.id_for_label }}">
                             {{ form.dest_name.label }}
                         </label>
@@ -79,35 +92,24 @@ The form uses GET so routes are shareable as URLs
                                     <td>{{ step.system.security_status|floatformat:1 }}</td>
                                     <td>
                                         {% if step.via == "start" %}
-                                            <span class="badge bg-secondary">Start</span>
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-flag-checkered"></i> Start</span>
                                         {% elif step.via == "gate" %}
-                                            <span class="badge bg-primary">Stargate</span>
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-arrow-right"></i> Stargate</span>
                                         {% elif step.via == "bridge" %}
-                                            <span class="badge bg-success">
-                                                <i class="fa-solid fa-bridge"></i>
-                                                Jump bridge
-                                            </span>
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-bridge"></i> Jump bridge</span>
                                             {% if step.bridge_name %}
-                                                <br><small class="text-muted"><code>{{ step.bridge_name }}</code></small>
+                                                <br><small class="text-muted font-monospace">{{ step.bridge_name }}</small>
                                             {% endif %}
                                         {% else %}
-                                            {# Arrival side of a drifter jump #}
-                                            <span class="badge bg-info text-dark">
-                                                <i class="fa-solid fa-circle-notch"></i>
-                                                Exit {{ step.hive|capfirst }}
-                                            </span>
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-circle-notch"></i> Exit {{ step.hive|capfirst }}</span>
                                             {% if step.exit_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Exit bookmark: <code>{{ step.exit_bookmark }}</code></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> <span class="font-monospace">{{ step.exit_bookmark }}</span></small>
                                             {% endif %}
                                         {% endif %}
                                         {% if step.enter_hive %}
-                                            {# Entry side: THIS is where the pilot jumps into the hive #}
-                                            <br><span class="badge bg-warning text-dark">
-                                                <i class="fa-solid fa-right-to-bracket"></i>
-                                                Enter {{ step.enter_hive|capfirst }} here
-                                            </span>
+                                            <br><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter {{ step.enter_hive|capfirst }} here</span>
                                             {% if step.enter_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Bookmark: <code>{{ step.enter_bookmark }}</code></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> <span class="font-monospace">{{ step.enter_bookmark }}</span></small>
                                             {% endif %}
                                         {% endif %}
                                     </td>
@@ -124,6 +126,14 @@ The form uses GET so routes are shareable as URLs
                 {% endcomment %}
                 <form method="get" action="{% url 'swiftdrift:set_destination' %}" class="mb-2">
                     <input type="hidden" name="system_id" value="{{ destination_target.id }}">
+                    {% comment %}
+                    Carry the route search along so the user returns to
+                    their calculated route after the SSO round trip.
+                    {% endcomment %}
+                    <input type="hidden" name="start_name" value="{{ form.start_name.value|default:'' }}">
+                    <input type="hidden" name="dest_name" value="{{ form.dest_name.value|default:'' }}">
+                    {% if form.use_drifters.value %}<input type="hidden" name="use_drifters" value="on">{% endif %}
+                    {% if form.use_bridges.value %}<input type="hidden" name="use_bridges" value="on">{% endif %}
                     <button type="submit" class="btn btn-warning">
                         <i class="fa-solid fa-location-crosshairs"></i>
                         Set destination: {{ destination_target.name }}
@@ -133,4 +143,24 @@ The form uses GET so routes are shareable as URLs
             </div>
         </div>
     {% endif %}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            "use strict";
+            const swapButton = document.getElementById("swap-systems");
+            if (!swapButton) {
+                return;
+            }
+            swapButton.addEventListener("click", function () {
+                const startInput = document.getElementById("{{ form.start_name.id_for_label }}");
+                const destInput = document.getElementById("{{ form.dest_name.id_for_label }}");
+                const startValue = startInput.value;
+                startInput.value = destInput.value;
+                destInput.value = startValue;
+                // Recalculate immediately when both fields are filled
+                if (startInput.value.trim() && destInput.value.trim()) {
+                    startInput.form.submit();
+                }
+            });
+        });
+    </script>
 {% endblock %}

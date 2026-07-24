@@ -13,6 +13,7 @@ from django.contrib.auth.models import Permission, User
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 import requests
 from esi.decorators import token_required
@@ -381,6 +382,23 @@ def team(request):
     return render(request, "swiftdrift/team.html", context)
 
 
+def _route_url_with_params(request):
+    """
+    URL of the route page including the original search parameters.
+
+    The set-destination form passes the route search (start, destination,
+    checkboxes) along with the target system id. django-esi preserves the
+    full query string through the SSO character selection, so after the
+    ESI call we can send the user back to their calculated route instead
+    of an empty search form.
+    """
+    params = request.GET.copy()
+    params.pop("system_id", None)
+    url = reverse("swiftdrift:route")
+    query = params.urlencode()
+    return f"{url}?{query}" if query else url
+
+
 @login_required
 @permission_required("swiftdrift.basic_access")
 @token_required(scopes=WAYPOINT_SCOPE)
@@ -401,7 +419,7 @@ def set_destination(request, token):
     raw_id = request.GET.get("system_id", "").strip()
     if not raw_id.isdigit() or not (KSPACE_MIN_ID <= int(raw_id) < KSPACE_MAX_ID):
         messages.error(request, "No valid destination system.")
-        return redirect("swiftdrift:route")
+        return redirect(_route_url_with_params(request))
     system_id = int(raw_id)
 
     system = SolarSystem.objects.filter(id=system_id).first()
@@ -425,14 +443,14 @@ def set_destination(request, token):
         response.raise_for_status()
     except requests.RequestException as error:
         messages.error(request, f"ESI request failed: {error}")
-        return redirect("swiftdrift:route")
+        return redirect(_route_url_with_params(request))
 
     messages.success(
         request,
         f"Destination set to {system_name} in "
         f"{token.character_name}'s game client.",
     )
-    return redirect("swiftdrift:route")
+    return redirect(_route_url_with_params(request))
 
 
 @login_required

@@ -23,9 +23,11 @@ from .forms import (
     KSPACE_MAX_ID,
     KSPACE_MIN_ID,
     JumpBridgeForm,
+    JumpBridgeImportForm,
     RouteForm,
     WormholeForm,
 )
+from .importer import parse_jump_bridges
 from .models import DrifterWormhole, JumpBridge
 from .routing import find_route
 
@@ -37,8 +39,6 @@ ESI_WAYPOINT_URL = "https://esi.evetech.net/latest/ui/autopilot/waypoint/"
 # The ESI scope needed to write autopilot waypoints into the game client
 WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
 
-# Hard cap for the waypoint loop, protects against absurd inputs
-MAX_WAYPOINTS = 50
 
 
 @login_required
@@ -165,7 +165,25 @@ def route(request):
             # Number of jumps = steps without the starting point
             jumps = len(result) - 1
 
-    context = {"form": form, "route": result, "jumps": jumps}
+    # Target for "set destination": the system that CONTAINS the (first)
+    # wormhole entry on the route; the pilot flies there via gates and
+    # continues manually. Routes without a wormhole leg target the final
+    # system instead.
+    destination_target = None
+    if result:
+        for step in result:
+            if step.get("enter_hive"):
+                destination_target = step["system"]
+                break
+        if destination_target is None:
+            destination_target = result[-1]["system"]
+
+    context = {
+        "form": form,
+        "route": result,
+        "jumps": jumps,
+        "destination_target": destination_target,
+    }
     return render(request, "swiftdrift/route.html", context)
 
 
@@ -195,7 +213,12 @@ def bridges(request):
     bridge_list = JumpBridge.objects.select_related(
         "from_system", "to_system", "created_by"
     ).order_by("from_system__name")
-    context = {"form": form, "bridges": bridge_list}
+    context = {
+        "form": form,
+        "import_form": JumpBridgeImportForm(),
+        "bridges": bridge_list,
+        "can_manage": request.user.has_perm("swiftdrift.manage_access"),
+    }
     return render(request, "swiftdrift/bridges.html", context)
 
 
@@ -218,6 +241,88 @@ def bridge_delete(request, pk: int):
         name = str(bridge)
         bridge.delete()
         messages.success(request, f"Jump bridge {name} deleted.")
+    return redirect("swiftdrift:bridges")
+
+
+@login_required
+@permission_required("swiftdrift.edit_access")
+def bridges_import(request):
+    """
+    Bulk import of jump bridges from a pasted list.
+    "Replace existing" wipes the table first and requires manage_access,
+    because it also removes bridges added by other editors.
+    """
+    if request.method != "POST":
+        return redirect("swiftdrift:bridges")
+
+    form = JumpBridgeImportForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Import form was invalid.")
+        return redirect("swiftdrift:bridges")
+
+    replace = form.cleaned_data["replace_existing"]
+    if replace and not request.user.has_perm("swiftdrift.manage_access"):
+        messages.error(
+            request, "Replacing all bridges requires admin access."
+        )
+        return redirect("swiftdrift:bridges")
+
+    entries, errors = parse_jump_bridges(form.cleaned_data["import_text"])
+
+    if not entries and errors:
+        # Nothing usable: report and change nothing
+        for error in errors[:10]:
+            messages.error(request, error)
+        return redirect("swiftdrift:bridges")
+
+    deleted_count = 0
+    if replace:
+        deleted_count, _ = JumpBridge.objects.all().delete()
+
+    # Skip pairs that already exist (in either direction)
+    existing = set()
+    for a, b in JumpBridge.objects.values_list("from_system_id", "to_system_id"):
+        existing.add(tuple(sorted((a, b))))
+
+    created = 0
+    skipped = 0
+    for entry in entries:
+        pair = tuple(sorted((entry["from_system"].id, entry["to_system"].id)))
+        if pair in existing:
+            skipped += 1
+            continue
+        JumpBridge.objects.create(
+            from_system=entry["from_system"],
+            to_system=entry["to_system"],
+            structure_name=entry["structure_name"],
+            created_by=request.user,
+        )
+        existing.add(pair)
+        created += 1
+
+    summary = f"Import finished: {created} bridges created"
+    if skipped:
+        summary += f", {skipped} duplicates skipped"
+    if replace:
+        summary += f", {deleted_count} old entries removed first"
+    messages.success(request, summary + ".")
+
+    # Show up to 10 unparsed lines so the user can fix their list
+    for error in errors[:10]:
+        messages.warning(request, error)
+    if len(errors) > 10:
+        messages.warning(request, f"...and {len(errors) - 10} more unparsed lines.")
+
+    return redirect("swiftdrift:bridges")
+
+
+@login_required
+@permission_required("swiftdrift.manage_access")
+def bridges_clear(request):
+    """Delete ALL jump bridges (admins only, POST only)."""
+    if request.method == "POST":
+        deleted_count, _ = JumpBridge.objects.all().delete()
+        messages.success(request, f"All {deleted_count} jump bridges deleted.")
     return redirect("swiftdrift:bridges")
 
 
@@ -292,49 +397,38 @@ def set_destination(request, token):
     sets one waypoint per system of our route; wormhole and jump bridge
     legs are flown manually by the pilot.
     """
-    raw_ids = request.GET.get("system_ids", "")
-
-    # Parse and validate: integers only, k-space range, sane count
-    system_ids = []
-    for part in raw_ids.split(","):
-        part = part.strip()
-        if not part.isdigit():
-            continue
-        system_id = int(part)
-        if KSPACE_MIN_ID <= system_id < KSPACE_MAX_ID:
-            system_ids.append(system_id)
-
-    if not system_ids or len(system_ids) > MAX_WAYPOINTS:
-        messages.error(request, "No valid route to send to the game client.")
+    raw_id = request.GET.get("system_id", "").strip()
+    if not raw_id.isdigit() or not (KSPACE_MIN_ID <= int(raw_id) < KSPACE_MAX_ID):
+        messages.error(request, "No valid destination system.")
         return redirect("swiftdrift:route")
+    system_id = int(raw_id)
 
-    # First waypoint clears the existing route, the rest are appended
+    system = SolarSystem.objects.filter(id=system_id).first()
+    system_name = system.name if system else str(system_id)
+
     headers = {
         "Authorization": f"Bearer {token.valid_access_token()}",
         "User-Agent": "aa-swift-drift (https://github.com/faky91/aa-swift-drift)",
     }
-    clear_existing = True
     try:
-        for system_id in system_ids:
-            response = requests.post(
-                ESI_WAYPOINT_URL,
-                params={
-                    "add_to_beginning": "false",
-                    "clear_other_waypoints": "true" if clear_existing else "false",
-                    "destination_id": system_id,
-                },
-                headers=headers,
-                timeout=10,
-            )
-            response.raise_for_status()
-            clear_existing = False
+        response = requests.post(
+            ESI_WAYPOINT_URL,
+            params={
+                "add_to_beginning": "false",
+                "clear_other_waypoints": "true",
+                "destination_id": system_id,
+            },
+            headers=headers,
+            timeout=10,
+        )
+        response.raise_for_status()
     except requests.RequestException as error:
         messages.error(request, f"ESI request failed: {error}")
         return redirect("swiftdrift:route")
 
     messages.success(
         request,
-        f"Route with {len(system_ids)} waypoints sent to "
+        f"Destination set to {system_name} in "
         f"{token.character_name}'s game client.",
     )
     return redirect("swiftdrift:route")

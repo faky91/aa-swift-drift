@@ -40,8 +40,12 @@ automatically picks up the active theme of the installation.
                     </a>
                 </li>
             {% endif %}
+            {% comment %}
+            Admin section: ms-auto pushes this and all following tabs to
+            the right edge, visually separated from the user tabs.
+            {% endcomment %}
             {% if perms.swiftdrift.edit_access %}
-                <li class="nav-item">
+                <li class="nav-item ms-auto">
                     <a class="nav-link {% if request.resolver_match.url_name == 'bridges' %}active{% endif %}"
                        href="{% url 'swiftdrift:bridges' %}">
                         Jump bridges

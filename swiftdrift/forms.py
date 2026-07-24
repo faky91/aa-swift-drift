@@ -209,3 +209,26 @@ class JumpBridgeForm(forms.Form):
                 "From and to system must be different."
             )
         return cleaned
+
+
+class JumpBridgeImportForm(forms.Form):
+    """Bulk import form: one bridge per line, common formats accepted."""
+
+    import_text = forms.CharField(
+        label="Bridge list",
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control font-monospace",
+                "rows": 8,
+                "placeholder": "4-HWWF \u00bb UALX-3 - Papa Bridge\n"
+                               "1DQ1-A \u00bb T5ZI-S\n"
+                               "one bridge per line",
+            }
+        ),
+    )
+    replace_existing = forms.BooleanField(
+        label="Replace ALL existing bridges with this list",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+

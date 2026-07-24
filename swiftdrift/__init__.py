@@ -1,4 +1,4 @@
 """aa-swiftdrift: Drifter Wormhole Tracker for Alliance Auth."""
 
 # App version. Mirrored in pyproject.toml.
-__version__ = "0.8.2"
+__version__ = "0.9.0"

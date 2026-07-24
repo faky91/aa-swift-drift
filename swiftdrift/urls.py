@@ -20,6 +20,8 @@ urlpatterns = [
     # Jump bridge management (edit_access)
     path("bridges/", views.bridges, name="bridges"),
     path("bridges/<int:pk>/delete/", views.bridge_delete, name="bridge_delete"),
+    path("bridges/import/", views.bridges_import, name="bridges_import"),
+    path("bridges/clear/", views.bridges_clear, name="bridges_clear"),
     # Team overview (manage_access)
     path("team/", views.team, name="team"),
     # Autocomplete API for system names

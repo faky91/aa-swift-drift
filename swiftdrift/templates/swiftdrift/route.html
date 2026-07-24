@@ -123,22 +123,13 @@ The form uses GET so routes are shareable as URLs
                 a POST body. The view validates the ids server-side.
                 {% endcomment %}
                 <form method="get" action="{% url 'swiftdrift:set_destination' %}" class="mb-2">
-                    <input type="hidden" name="system_ids"
-                           value="{% for step in route %}{{ step.system.id }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                    <input type="hidden" name="system_id" value="{{ destination_target.id }}">
                     <button type="submit" class="btn btn-warning">
                         <i class="fa-solid fa-location-crosshairs"></i>
-                        Set destination in game
+                        Set destination: {{ destination_target.name }}
                     </button>
                 </form>
 
-                <p class="text-muted small mb-0">
-                    "Enter ... here" marks the system where you jump into the hive;
-                    the listed bookmark is the in-game bookmark at that wormhole.
-                    Drifter jumps require both wormholes to still be open, check
-                    their status in the overview first. "Set destination" places
-                    one waypoint per system in your game client; wormhole and
-                    bridge legs are flown manually.
-                </p>
             </div>
         </div>
     {% endif %}

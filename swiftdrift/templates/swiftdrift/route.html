@@ -31,10 +31,16 @@ The form uses GET so routes are shareable as URLs
                         {% endfor %}
                     </div>
                     <div class="col-md-4">
-                        <div class="form-check mb-2">
+                        <div class="form-check">
                             {{ form.use_drifters }}
                             <label class="form-check-label" for="{{ form.use_drifters.id_for_label }}">
                                 {{ form.use_drifters.label }}
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            {{ form.use_bridges }}
+                            <label class="form-check-label" for="{{ form.use_bridges.id_for_label }}">
+                                {{ form.use_bridges.label }}
                             </label>
                         </div>
                         <button type="submit" class="btn btn-primary">
@@ -76,6 +82,14 @@ The form uses GET so routes are shareable as URLs
                                             <span class="badge bg-secondary">Start</span>
                                         {% elif step.via == "gate" %}
                                             <span class="badge bg-primary">Stargate</span>
+                                        {% elif step.via == "bridge" %}
+                                            <span class="badge bg-success">
+                                                <i class="fa-solid fa-bridge"></i>
+                                                Jump bridge
+                                            </span>
+                                            {% if step.bridge_name %}
+                                                <br><small class="text-muted"><code>{{ step.bridge_name }}</code></small>
+                                            {% endif %}
                                         {% else %}
                                             {# Arrival side of a drifter jump #}
                                             <span class="badge bg-info text-dark">

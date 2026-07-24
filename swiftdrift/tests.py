@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from eve_sde.models import Constellation, Region, SolarSystem, Stargate
 
-from .models import DrifterWormhole
+from .models import DrifterWormhole, JumpBridge
 from .routing import GRAPH_CACHE_KEY, find_route
 from .tasks import delete_expired_wormholes
 
@@ -164,4 +164,32 @@ class RoutingTests(SwiftDriftTestBase):
         DrifterWormhole(system=self.x, hive="barbican", created_by=self.user).save()
 
         route = find_route(self.a.id, self.y.id, use_drifters=True)
+        self.assertIsNone(route)
+
+    def test_jump_bridge_connects_islands(self):
+        # A jump bridge between C and X connects the two islands
+        JumpBridge.objects.create(
+            from_system=self.c, to_system=self.x, created_by=self.user
+        )
+
+        route = find_route(self.a.id, self.y.id, use_drifters=False)
+        steps = [(step["system"].name, step["via"]) for step in route]
+        self.assertEqual(
+            steps,
+            [
+                ("Alpha", "start"),
+                ("Bravo", "gate"),
+                ("Charlie", "gate"),
+                ("Xray", "bridge"),
+                ("Yankee", "gate"),
+            ],
+        )
+
+    def test_bridges_can_be_disabled(self):
+        JumpBridge.objects.create(
+            from_system=self.c, to_system=self.x, created_by=self.user
+        )
+        route = find_route(
+            self.a.id, self.y.id, use_drifters=False, use_bridges=False
+        )
         self.assertIsNone(route)

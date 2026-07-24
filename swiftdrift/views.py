@@ -16,8 +16,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from eve_sde.models import SolarSystem
 
-from .forms import KSPACE_MAX_ID, KSPACE_MIN_ID, RouteForm, WormholeForm
-from .models import DrifterWormhole
+from .forms import (
+    KSPACE_MAX_ID,
+    KSPACE_MIN_ID,
+    JumpBridgeForm,
+    RouteForm,
+    WormholeForm,
+)
+from .models import DrifterWormhole, JumpBridge
 from .routing import find_route
 
 
@@ -137,6 +143,7 @@ def route(request):
             start_id=form.cleaned_data["start_system"].id,
             dest_id=form.cleaned_data["dest_system"].id,
             use_drifters=form.cleaned_data["use_drifters"],
+            use_bridges=form.cleaned_data["use_bridges"],
         )
         if result is None:
             messages.warning(request, "No route found.")
@@ -146,6 +153,58 @@ def route(request):
 
     context = {"form": form, "route": result, "jumps": jumps}
     return render(request, "swiftdrift/route.html", context)
+
+
+@login_required
+@permission_required("swiftdrift.edit_access")
+def bridges(request):
+    """List all jump bridges and add new ones (editors)."""
+    if request.method == "POST":
+        form = JumpBridgeForm(request.POST)
+        if form.is_valid():
+            bridge = JumpBridge(
+                from_system=form.cleaned_data["from_system"],
+                to_system=form.cleaned_data["to_system"],
+                structure_name=form.cleaned_data["structure_name"],
+                created_by=request.user,
+            )
+            bridge.save()
+            messages.success(
+                request,
+                f"Jump bridge {bridge.from_system.name} <> "
+                f"{bridge.to_system.name} added.",
+            )
+            return redirect("swiftdrift:bridges")
+    else:
+        form = JumpBridgeForm()
+
+    bridge_list = JumpBridge.objects.select_related(
+        "from_system", "to_system", "created_by"
+    ).order_by("from_system__name")
+    context = {"form": form, "bridges": bridge_list}
+    return render(request, "swiftdrift/bridges.html", context)
+
+
+@login_required
+@permission_required("swiftdrift.edit_access")
+def bridge_delete(request, pk: int):
+    """
+    Delete a jump bridge.
+    Editors may only delete their own entries, admins may delete any.
+    """
+    bridge = get_object_or_404(JumpBridge, pk=pk)
+
+    is_owner = bridge.created_by_id == request.user.id
+    is_manager = request.user.has_perm("swiftdrift.manage_access")
+    if not (is_owner or is_manager):
+        messages.error(request, "You may only delete your own entries.")
+        return redirect("swiftdrift:bridges")
+
+    if request.method == "POST":
+        name = str(bridge)
+        bridge.delete()
+        messages.success(request, f"Jump bridge {name} deleted.")
+    return redirect("swiftdrift:bridges")
 
 
 @login_required

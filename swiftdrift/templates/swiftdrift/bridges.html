@@ -1,0 +1,114 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Jump bridge management for editors: add and list Ansiblex connections.
+One entry is treated as bidirectional by the route planner.
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Add jump bridge</h5>
+
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ form.from_name.id_for_label }}">
+                            {{ form.from_name.label }}
+                        </label>
+                        {{ form.from_name }}
+                        {% for error in form.from_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ form.to_name.id_for_label }}">
+                            {{ form.to_name.label }}
+                        </label>
+                        {{ form.to_name }}
+                        {% for error in form.to_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.structure_name.id_for_label }}">
+                            {{ form.structure_name.label }}
+                        </label>
+                        {{ form.structure_name }}
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fa-solid fa-plus"></i>
+                            Add
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <p class="text-muted small mt-2 mb-0">
+                One entry counts as a connection in both directions.
+                Bridges do not expire; remove them when they are unanchored.
+            </p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Known jump bridges</h5>
+
+            {% if bridges %}
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Structure name</th>
+                                <th>Added by</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bridge in bridges %}
+                                <tr>
+                                    <td><strong>{{ bridge.from_system.name }}</strong></td>
+                                    <td><strong>{{ bridge.to_system.name }}</strong></td>
+                                    <td>
+                                        {% if bridge.structure_name %}
+                                            <code>{{ bridge.structure_name }}</code>
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ bridge.created_by|default:"unknown" }}<br>
+                                        <small class="text-muted">{{ bridge.created_at|date:"Y-m-d" }}</small>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if perms.swiftdrift.manage_access or bridge.created_by_id == request.user.id %}
+                                            <form method="post"
+                                                  action="{% url 'swiftdrift:bridge_delete' bridge.pk %}"
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('Really delete this jump bridge?');">
+                                                {% csrf_token %}
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-danger"
+                                                        title="Delete">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No jump bridges added yet.</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

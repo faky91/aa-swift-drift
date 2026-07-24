@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import DrifterWormhole
+from .models import DrifterWormhole, JumpBridge
 
 
 @admin.register(DrifterWormhole)
@@ -19,3 +19,10 @@ class DrifterWormholeAdmin(admin.ModelAdmin):
     list_filter = ("hive", "mass_status", "eol")
     search_fields = ("system__name",)
     ordering = ("-created_at",)
+
+
+@admin.register(JumpBridge)
+class JumpBridgeAdmin(admin.ModelAdmin):
+    list_display = ("from_system", "to_system", "structure_name", "created_by", "created_at")
+    search_fields = ("from_system__name", "to_system__name", "structure_name")
+    ordering = ("from_system__name",)

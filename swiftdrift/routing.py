@@ -22,7 +22,7 @@ from django.core.cache import cache
 from eve_sde.models import SolarSystem, Stargate
 
 from . import app_settings
-from .models import DrifterWormhole
+from .models import DrifterWormhole, JumpBridge
 
 # Cache key for the stargate graph
 GRAPH_CACHE_KEY = "swiftdrift_stargate_graph"
@@ -78,14 +78,18 @@ def get_drifter_edges() -> dict:
     return edges
 
 
-def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
+def find_route(
+    start_id: int, dest_id: int, use_drifters: bool = True, use_bridges: bool = True
+):
     """
     Calculate the shortest route from start_id to dest_id.
 
     Returns: a list of steps, or None if no route exists.
     Each step is a dict:
-        {"system": SolarSystem, "via": "start" | "gate" | "drifter",
-         "hive": None | "conflux" | ...}
+        {"system": SolarSystem,
+         "via": "start" | "gate" | "drifter" | "bridge",
+         "hive": None | "conflux" | ...,          (drifter steps)
+         "bridge_name": None | "structure name"}  (bridge steps)
     """
     gates = get_stargate_graph()
     drifter_edges = get_drifter_edges() if use_drifters else {}
@@ -95,6 +99,17 @@ def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
     drifter_neighbors = defaultdict(list)
     for (a, b), hive in drifter_edges.items():
         drifter_neighbors[a].append((b, hive))
+
+    # Jump bridges: one row = bidirectional connection, costs 1 like a gate
+    bridge_neighbors = defaultdict(list)
+    if use_bridges:
+        for bridge in JumpBridge.objects.all():
+            bridge_neighbors[bridge.from_system_id].append(
+                (bridge.to_system_id, bridge.structure_name)
+            )
+            bridge_neighbors[bridge.to_system_id].append(
+                (bridge.from_system_id, bridge.structure_name)
+            )
 
     # ------------------------------------------------------------------
     # Dijkstra: shortest path with edge weights.
@@ -131,6 +146,14 @@ def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
                 previous[neighbor] = (current, "drifter", hive)
                 heapq.heappush(queue, (new_dist, neighbor))
 
+        # Jump bridge neighbors (same cost as a gate jump)
+        for neighbor, bridge_name in bridge_neighbors.get(current, ()):
+            new_dist = dist + 1
+            if new_dist < distances.get(neighbor, float("inf")):
+                distances[neighbor] = new_dist
+                previous[neighbor] = (current, "bridge", bridge_name)
+                heapq.heappush(queue, (new_dist, neighbor))
+
     if dest_id not in previous and start_id != dest_id:
         return None  # no route found
 
@@ -151,8 +174,13 @@ def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
     systems = SolarSystem.objects.in_bulk(system_ids)
 
     steps = [
-        {"system": systems[system_id], "via": via, "hive": hive}
-        for system_id, via, hive in path
+        {
+            "system": systems[system_id],
+            "via": via,
+            "hive": extra if via == "drifter" else None,
+            "bridge_name": extra if via == "bridge" else None,
+        }
+        for system_id, via, extra in path
     ]
 
     # ------------------------------------------------------------------

@@ -54,7 +54,7 @@ class WormholeForm(forms.Form):
         ),
     )
     hive = forms.ChoiceField(
-        label="Hive",
+        label="Wormhole",
         choices=DrifterWormhole.Hive.choices,
         widget=forms.Select(attrs={"class": "form-select"}),
     )
@@ -126,6 +126,12 @@ class RouteForm(forms.Form):
             }
         ),
     )
+    use_bridges = forms.BooleanField(
+        label="Use jump bridges",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
     use_drifters = forms.BooleanField(
         label="Use drifter wormholes as shortcuts",
         required=False,
@@ -142,3 +148,64 @@ class RouteForm(forms.Form):
         name = self.cleaned_data["dest_name"]
         self.cleaned_data["dest_system"] = resolve_kspace_system(name)
         return name
+
+
+class JumpBridgeForm(forms.Form):
+    """Form for adding a jump bridge connection."""
+
+    from_name = forms.CharField(
+        label="From system",
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. 4-HWWF",
+                "autocomplete": "off",
+                "data-system-autocomplete": "1",
+            }
+        ),
+    )
+    to_name = forms.CharField(
+        label="To system",
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. UALX-3",
+                "autocomplete": "off",
+                "data-system-autocomplete": "1",
+            }
+        ),
+    )
+    structure_name = forms.CharField(
+        label="Structure name",
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "optional, in-game structure name",
+                "autocomplete": "off",
+            }
+        ),
+    )
+
+    def clean_from_name(self):
+        name = self.cleaned_data["from_name"]
+        self.cleaned_data["from_system"] = resolve_kspace_system(name)
+        return name
+
+    def clean_to_name(self):
+        name = self.cleaned_data["to_name"]
+        self.cleaned_data["to_system"] = resolve_kspace_system(name)
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        from_system = cleaned.get("from_system")
+        to_system = cleaned.get("to_system")
+        if from_system and to_system and from_system.id == to_system.id:
+            raise forms.ValidationError(
+                "From and to system must be different."
+            )
+        return cleaned

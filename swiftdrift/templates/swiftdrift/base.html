@@ -40,6 +40,14 @@ automatically picks up the active theme of the installation.
                     </a>
                 </li>
             {% endif %}
+            {% if perms.swiftdrift.edit_access %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'bridges' %}active{% endif %}"
+                       href="{% url 'swiftdrift:bridges' %}">
+                        Jump bridges
+                    </a>
+                </li>
+            {% endif %}
             {% if perms.swiftdrift.manage_access %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'team' %}active{% endif %}"

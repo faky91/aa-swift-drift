@@ -79,7 +79,7 @@ class DrifterWormhole(models.Model):
     hive = models.CharField(
         max_length=16,
         choices=Hive.choices,
-        verbose_name="Hive",
+        verbose_name="Wormhole",
     )
 
     # Mass state
@@ -193,3 +193,51 @@ class DrifterWormhole(models.Model):
     def active(cls):
         """QuerySet of all currently valid wormholes."""
         return cls.objects.filter(expires_at__gt=timezone.now())
+
+class JumpBridge(models.Model):
+    """
+    A player-owned Ansiblex jump bridge connection between two systems.
+
+    One row represents the connection and is treated as bidirectional by
+    the route planner (Ansiblex gates are usually deployed in pairs).
+    Unlike wormholes, bridges are long-lived and do not expire.
+    """
+
+    from_system = models.ForeignKey(
+        SolarSystem,
+        on_delete=models.CASCADE,
+        related_name="+",
+        verbose_name="From system",
+    )
+    to_system = models.ForeignKey(
+        SolarSystem,
+        on_delete=models.CASCADE,
+        related_name="+",
+        verbose_name="To system",
+    )
+
+    # In-game structure name, e.g. "4-HWWF >> UALX-3 - Bridge"
+    structure_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Structure name",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="+",
+    )
+
+    class Meta:
+        default_permissions = ()  # access is handled via General permissions
+        verbose_name = "Jump Bridge"
+        verbose_name_plural = "Jump Bridges"
+
+    def __str__(self) -> str:
+        return f"{self.from_system.name} <> {self.to_system.name}"

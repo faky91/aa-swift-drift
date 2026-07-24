@@ -14,7 +14,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from esi.clients import EsiClientProvider
+import requests
 from esi.decorators import token_required
 
 from eve_sde.models import SolarSystem
@@ -29,8 +29,10 @@ from .forms import (
 from .models import DrifterWormhole, JumpBridge
 from .routing import find_route
 
-# Shared ESI client for this app (lazy, created once per process)
-esi = EsiClientProvider(app_info_text="aa-swift-drift")
+# django-esi v9 removed the generated Swagger client (esi.clients), so we
+# call the single endpoint we need directly via HTTP. Token management
+# (SSO, refresh, the token_required decorator) still comes from django-esi.
+ESI_WAYPOINT_URL = "https://esi.evetech.net/latest/ui/autopilot/waypoint/"
 
 # The ESI scope needed to write autopilot waypoints into the game client
 WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
@@ -307,15 +309,28 @@ def set_destination(request, token):
         return redirect("swiftdrift:route")
 
     # First waypoint clears the existing route, the rest are appended
+    headers = {
+        "Authorization": f"Bearer {token.valid_access_token()}",
+        "User-Agent": "aa-swift-drift (https://github.com/faky91/aa-swift-drift)",
+    }
     clear_existing = True
-    for system_id in system_ids:
-        esi.client.User_Interface.post_ui_autopilot_waypoint(
-            add_to_beginning=False,
-            clear_other_waypoints=clear_existing,
-            destination_id=system_id,
-            token=token.valid_access_token(),
-        ).result()
-        clear_existing = False
+    try:
+        for system_id in system_ids:
+            response = requests.post(
+                ESI_WAYPOINT_URL,
+                params={
+                    "add_to_beginning": "false",
+                    "clear_other_waypoints": "true" if clear_existing else "false",
+                    "destination_id": system_id,
+                },
+                headers=headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            clear_existing = False
+    except requests.RequestException as error:
+        messages.error(request, f"ESI request failed: {error}")
+        return redirect("swiftdrift:route")
 
     messages.success(
         request,

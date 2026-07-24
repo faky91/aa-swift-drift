@@ -1,0 +1,76 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Read-only team overview for admins: who holds editor or admin access
+and through which Auth groups. Changing access happens in Auth's group
+management or the Django admin, not here, so permission changes have
+exactly one source of truth.
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Editor team</h5>
+
+            {% if members %}
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Main character</th>
+                                <th>Editor</th>
+                                <th>Admin</th>
+                                <th>Access granted via</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in members %}
+                                <tr>
+                                    <td><strong>{{ member.user.username }}</strong></td>
+                                    <td>{{ member.main_character|default:"–" }}</td>
+                                    <td>
+                                        {% if member.is_editor %}
+                                            <span class="badge bg-success"><i class="fa-solid fa-check"></i></span>
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if member.is_admin %}
+                                            <span class="badge bg-primary"><i class="fa-solid fa-check"></i></span>
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% for group in member.via_groups %}
+                                            <span class="badge bg-secondary">{{ group.name }}</span>
+                                        {% empty %}
+                                            <span class="badge bg-warning text-dark"
+                                                  title="Permission assigned directly to the user instead of via a group">
+                                                direct assignment
+                                            </span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted">No users with editor or admin access found.</p>
+            {% endif %}
+
+            <div class="aa-callout aa-callout-info mt-3">
+                <p class="mb-0">
+                    Access is managed through the Auth groups shown above.
+                    To remove someone from the team, remove them from the
+                    granting group via <strong>Group Management</strong> in Auth
+                    (or <a href="/admin/auth/group/">the Django admin</a>).
+                    Users marked "direct assignment" are edited on their user
+                    account in <a href="/admin/auth/user/">the Django admin</a>.
+                </p>
+            </div>
+        </div>
+    </div>
+{% endblock %}

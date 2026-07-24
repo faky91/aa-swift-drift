@@ -150,7 +150,34 @@ def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
     system_ids = [system_id for system_id, _, _ in path]
     systems = SolarSystem.objects.in_bulk(system_ids)
 
-    return [
+    steps = [
         {"system": systems[system_id], "via": via, "hive": hive}
         for system_id, via, hive in path
     ]
+
+    # ------------------------------------------------------------------
+    # Annotate drifter transitions so the pilot knows WHERE to jump in.
+    # The step with via="drifter" is the ARRIVAL system; the entry hole
+    # is located in the PREVIOUS system. We attach the hive and the
+    # in-game bookmark name of the entry and exit wormholes.
+    # ------------------------------------------------------------------
+    if use_drifters:
+        # Map of (system_id, hive) -> bookmark for all active wormholes
+        bookmarks = {
+            (wh.system_id, wh.hive): wh.bookmark
+            for wh in DrifterWormhole.active()
+        }
+        for index, step in enumerate(steps):
+            if step["via"] != "drifter" or index == 0:
+                continue
+            hive = step["hive"]
+            entry_step = steps[index - 1]
+            # Tell the previous step that the pilot enters the hive here
+            entry_step["enter_hive"] = hive
+            entry_step["enter_bookmark"] = bookmarks.get(
+                (entry_step["system"].id, hive), ""
+            )
+            # Bookmark of the exit hole in the arrival system
+            step["exit_bookmark"] = bookmarks.get((step["system"].id, hive), "")
+
+    return steps

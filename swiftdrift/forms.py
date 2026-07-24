@@ -68,6 +68,18 @@ class WormholeForm(forms.Form):
         required=False,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
+    bookmark = forms.CharField(
+        label="Bookmark name",
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "in-game bookmark at the wormhole, e.g. BAR entry Jita",
+                "autocomplete": "off",
+            }
+        ),
+    )
     notes = forms.CharField(
         label="Notes",
         required=False,
@@ -75,7 +87,7 @@ class WormholeForm(forms.Form):
             attrs={
                 "class": "form-control",
                 "rows": 2,
-                "placeholder": "optional, e.g. bookmark name",
+                "placeholder": "optional",
             }
         ),
     )

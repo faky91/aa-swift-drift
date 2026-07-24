@@ -87,7 +87,9 @@ clicking a header sorts by that column, clicking again reverses.
                                             <span class="text-muted">–</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ wh.notes|default:"" }}</td>
+                                    <td>
+                                        {% if wh.bookmark %}<code>{{ wh.bookmark }}</code>{% if wh.notes %}<br>{% endif %}{% endif %}{{ wh.notes|default:"" }}
+                                    </td>
                                     <td data-sort="{{ wh.created_by|default:'zzz' }}">
                                         {{ wh.created_by|default:"unknown" }}<br>
                                         <small class="text-muted">{{ wh.created_at|date:"Y-m-d H:i" }}</small>

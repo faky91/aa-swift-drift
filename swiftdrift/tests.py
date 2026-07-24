@@ -129,8 +129,12 @@ class RoutingTests(SwiftDriftTestBase):
 
     def test_drifter_shortcut_connects_islands(self):
         # A Conflux wormhole in B and in X connects the two islands
-        DrifterWormhole(system=self.b, hive="conflux", created_by=self.user).save()
-        DrifterWormhole(system=self.x, hive="conflux", created_by=self.user).save()
+        DrifterWormhole(
+            system=self.b, hive="conflux", bookmark="CFX in Bravo", created_by=self.user
+        ).save()
+        DrifterWormhole(
+            system=self.x, hive="conflux", bookmark="CFX in Xray", created_by=self.user
+        ).save()
 
         route = find_route(self.a.id, self.y.id, use_drifters=True)
         steps = [(step["system"].name, step["via"]) for step in route]
@@ -143,6 +147,16 @@ class RoutingTests(SwiftDriftTestBase):
                 ("Yankee", "gate"),
             ],
         )
+
+        # The entry annotation must sit on Bravo (the system BEFORE the
+        # drifter step) and carry the bookmark of the entry wormhole
+        bravo = route[1]
+        self.assertEqual(bravo["enter_hive"], "conflux")
+        self.assertEqual(bravo["enter_bookmark"], "CFX in Bravo")
+
+        # The arrival step carries the bookmark of the exit wormhole
+        xray = route[2]
+        self.assertEqual(xray["exit_bookmark"], "CFX in Xray")
 
     def test_different_hives_are_not_connected(self):
         # Conflux in B, Barbican in X: NO connection, different hives

@@ -15,6 +15,8 @@ urlpatterns = [
     path("<int:pk>/delete/", views.delete, name="delete"),
     # Route search (basic_access)
     path("route/", views.route, name="route"),
+    # Team overview (manage_access)
+    path("team/", views.team, name="team"),
     # Autocomplete API for system names
     path("api/systems/", views.system_search, name="system_search"),
 ]

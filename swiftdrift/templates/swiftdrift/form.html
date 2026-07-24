@@ -55,8 +55,16 @@ The only difference is the title and the pre-filled values.
                         </div>
                     </div>
 
+                    {# Bookmark name #}
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.bookmark.id_for_label }}">
+                            {{ form.bookmark.label }}
+                        </label>
+                        {{ form.bookmark }}
+                    </div>
+
                     {# Notes #}
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <label class="form-label" for="{{ form.notes.id_for_label }}">
                             {{ form.notes.label }}
                         </label>

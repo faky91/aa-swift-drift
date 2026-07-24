@@ -103,7 +103,16 @@ class DrifterWormhole(models.Model):
         editable=False,
     )
 
-    # Free text, e.g. bookmark name or location inside the system
+    # Name of the in-game bookmark that marks the wormhole entrance.
+    # Shown on the route page so pilots know what to warp to.
+    bookmark = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Bookmark",
+    )
+
+    # Free text for anything else worth knowing
     notes = models.TextField(
         blank=True,
         default="",

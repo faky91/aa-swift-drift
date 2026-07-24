@@ -9,6 +9,8 @@ Access control:
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.models import Permission, User
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -48,6 +50,7 @@ def add(request):
                 hive=form.cleaned_data["hive"],
                 mass_status=form.cleaned_data["mass_status"],
                 eol=form.cleaned_data["eol"],
+                bookmark=form.cleaned_data["bookmark"],
                 notes=form.cleaned_data["notes"],
                 created_by=request.user,
                 updated_by=request.user,
@@ -75,6 +78,7 @@ def edit(request, pk: int):
             wormhole.hive = form.cleaned_data["hive"]
             wormhole.mass_status = form.cleaned_data["mass_status"]
             wormhole.eol = form.cleaned_data["eol"]
+            wormhole.bookmark = form.cleaned_data["bookmark"]
             wormhole.notes = form.cleaned_data["notes"]
             wormhole.updated_by = request.user
             wormhole.save()
@@ -88,6 +92,7 @@ def edit(request, pk: int):
                 "hive": wormhole.hive,
                 "mass_status": wormhole.mass_status,
                 "eol": wormhole.eol,
+                "bookmark": wormhole.bookmark,
                 "notes": wormhole.notes,
             }
         )
@@ -141,6 +146,60 @@ def route(request):
 
     context = {"form": form, "route": result, "jumps": jumps}
     return render(request, "swiftdrift/route.html", context)
+
+
+@login_required
+@permission_required("swiftdrift.manage_access")
+def team(request):
+    """
+    Team overview for admins: who has editor or admin access, and
+    through which Auth groups the access is granted.
+
+    Access itself is managed through groups in Alliance Auth (Group
+    Management or the Django admin), NOT here. This page is read-only
+    on purpose so there is exactly one place where permissions change.
+    """
+    # The two write-level permissions of this app
+    edit_perm = Permission.objects.get(
+        codename="edit_access", content_type__app_label="swiftdrift"
+    )
+    manage_perm = Permission.objects.get(
+        codename="manage_access", content_type__app_label="swiftdrift"
+    )
+
+    # Everyone who holds one of them, via a group or assigned directly
+    users = (
+        User.objects.filter(
+            Q(groups__permissions__in=[edit_perm, manage_perm])
+            | Q(user_permissions__in=[edit_perm, manage_perm])
+        )
+        .distinct()
+        .order_by("username")
+    )
+
+    members = []
+    for user in users:
+        # Main character name from the Auth profile, if one is linked
+        main_character = ""
+        profile = getattr(user, "profile", None)
+        if profile and getattr(profile, "main_character", None):
+            main_character = profile.main_character.character_name
+
+        members.append(
+            {
+                "user": user,
+                "main_character": main_character,
+                "is_editor": user.has_perm("swiftdrift.edit_access"),
+                "is_admin": user.has_perm("swiftdrift.manage_access"),
+                # Groups of this user that grant one of the permissions
+                "via_groups": user.groups.filter(
+                    permissions__in=[edit_perm, manage_perm]
+                ).distinct(),
+            }
+        )
+
+    context = {"members": members}
+    return render(request, "swiftdrift/team.html", context)
 
 
 @login_required

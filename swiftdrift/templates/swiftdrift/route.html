@@ -77,11 +77,24 @@ The form uses GET so routes are shareable as URLs
                                         {% elif step.via == "gate" %}
                                             <span class="badge bg-primary">Stargate</span>
                                         {% else %}
-                                            {# Highlight drifter jumps clearly #}
+                                            {# Arrival side of a drifter jump #}
                                             <span class="badge bg-info text-dark">
                                                 <i class="fa-solid fa-circle-notch"></i>
-                                                Drifter: {{ step.hive|capfirst }}
+                                                Exit {{ step.hive|capfirst }}
                                             </span>
+                                            {% if step.exit_bookmark %}
+                                                <br><small class="text-muted">exit hole: <code>{{ step.exit_bookmark }}</code></small>
+                                            {% endif %}
+                                        {% endif %}
+                                        {% if step.enter_hive %}
+                                            {# Entry side: THIS is where the pilot jumps into the hive #}
+                                            <br><span class="badge bg-warning text-dark">
+                                                <i class="fa-solid fa-right-to-bracket"></i>
+                                                Enter {{ step.enter_hive|capfirst }} here
+                                            </span>
+                                            {% if step.enter_bookmark %}
+                                                <br><small class="text-muted">bookmark: <code>{{ step.enter_bookmark }}</code></small>
+                                            {% endif %}
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -91,8 +104,10 @@ The form uses GET so routes are shareable as URLs
                 </div>
 
                 <p class="text-muted small mb-0">
-                    Drifter jumps require both wormholes to still be open.
-                    Check their status in the overview first.
+                    "Enter ... here" marks the system where you jump into the hive;
+                    the listed bookmark is the in-game bookmark at that wormhole.
+                    Drifter jumps require both wormholes to still be open, check
+                    their status in the overview first.
                 </p>
             </div>
         </div>

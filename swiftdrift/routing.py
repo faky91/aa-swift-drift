@@ -14,15 +14,17 @@ The stargate data comes from django-eveonline-sde (eve_sde). The SDE
 must be loaded once for this to work (see README, esde_load_sde).
 """
 
+import datetime
 import heapq
 from collections import defaultdict
 
 from django.core.cache import cache
+from django.utils import timezone
 
 from eve_sde.models import SolarSystem, Stargate
 
 from . import app_settings
-from .models import DrifterWormhole, JumpBridge
+from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
 
 # Cache key for the stargate graph
 GRAPH_CACHE_KEY = "swiftdrift_stargate_graph"
@@ -55,31 +57,70 @@ def get_stargate_graph() -> dict:
     return graph
 
 
-def get_drifter_edges() -> dict:
+def get_wormhole_edges(exclude_ids=None) -> dict:
     """
-    Build the drifter edges from the currently active wormholes.
+    Build the wormhole edges from the currently active entries.
 
-    Returns: {(system_a_id, system_b_id): hive_name, ...}
-    for all system pairs connected through the same hive.
+    Returns: {(system_a_id, system_b_id): edge_info, ...} where
+    edge_info = {"hive": hive value, "enter": entry-side wormhole,
+    "exit": exit-side wormhole}. Directions are stored separately so
+    the enter/exit objects are always correct for the travel direction.
+
+    Two edge types:
+    - Drifter wormholes: all systems with an active hole of the SAME
+      hive are connected to each other (through the hive network).
+    - Normal wormholes: a single direct connection between the entry
+      system and the reported destination system.
+
+    exclude_ids: wormhole entry ids whose edges are skipped, used by
+    the "find alternative route" feature.
     """
-    # Group active wormholes by hive
-    by_hive = defaultdict(set)
-    for wh in DrifterWormhole.active().select_related("system"):
-        by_hive[wh.hive].add(wh.system_id)
-
+    exclude = set(exclude_ids or ())
     edges = {}
-    for hive, system_ids in by_hive.items():
-        ids = sorted(system_ids)
-        # Connect every pair within the same hive
-        for i, a in enumerate(ids):
-            for b in ids[i + 1 :]:
-                edges[(a, b)] = hive
-                edges[(b, a)] = hive
+
+    # One wormhole object per (system, hive); newest entry wins
+    holes = {}
+    normals = []
+    for wh in DrifterWormhole.active().order_by("created_at"):
+        if wh.id in exclude:
+            continue
+        if wh.hive == DrifterWormhole.Hive.NORMAL:
+            if wh.destination_system_id:
+                normals.append(wh)
+        else:
+            holes[(wh.system_id, wh.hive)] = wh
+
+    # Drifter network: connect every pair within the same hive
+    by_hive = defaultdict(list)
+    for (system_id, hive), wh in holes.items():
+        by_hive[hive].append(wh)
+    for hive, hive_holes in by_hive.items():
+        for i, a in enumerate(hive_holes):
+            for b in hive_holes[i + 1 :]:
+                edges[(a.system_id, b.system_id)] = {
+                    "hive": hive, "enter": a, "exit": b,
+                }
+                edges[(b.system_id, a.system_id)] = {
+                    "hive": hive, "enter": b, "exit": a,
+                }
+
+    # Normal wormholes: direct A <-> B, one entry describes both sides
+    for wh in normals:
+        edges[(wh.system_id, wh.destination_system_id)] = {
+            "hive": wh.hive, "enter": wh, "exit": wh,
+        }
+        edges[(wh.destination_system_id, wh.system_id)] = {
+            "hive": wh.hive, "enter": wh, "exit": wh,
+        }
     return edges
 
 
 def find_route(
-    start_id: int, dest_id: int, use_drifters: bool = True, use_bridges: bool = True
+    start_id: int,
+    dest_id: int,
+    use_drifters: bool = True,
+    use_bridges: bool = True,
+    exclude_wormhole_ids=None,
 ):
     """
     Calculate the shortest route from start_id to dest_id.
@@ -92,13 +133,15 @@ def find_route(
          "bridge_name": None | "structure name"}  (bridge steps)
     """
     gates = get_stargate_graph()
-    drifter_edges = get_drifter_edges() if use_drifters else {}
+    wormhole_edges = (
+        get_wormhole_edges(exclude_wormhole_ids) if use_drifters else {}
+    )
     wh_weight = app_settings.SWIFTDRIFT_ROUTE_WH_WEIGHT
 
-    # Prepare drifter neighbors per system
+    # Prepare wormhole neighbors per system
     drifter_neighbors = defaultdict(list)
-    for (a, b), hive in drifter_edges.items():
-        drifter_neighbors[a].append((b, hive))
+    for (a, b), edge_info in wormhole_edges.items():
+        drifter_neighbors[a].append((b, edge_info))
 
     # Jump bridges: one row = bidirectional connection, costs 1 like a gate
     bridge_neighbors = defaultdict(list)
@@ -138,12 +181,12 @@ def find_route(
                 previous[neighbor] = (current, "gate", None)
                 heapq.heappush(queue, (new_dist, neighbor))
 
-        # Drifter neighbors (same hive)
-        for neighbor, hive in drifter_neighbors.get(current, ()):
+        # Wormhole neighbors (drifter network or normal wormholes)
+        for neighbor, edge_info in drifter_neighbors.get(current, ()):
             new_dist = dist + wh_weight
             if new_dist < distances.get(neighbor, float("inf")):
                 distances[neighbor] = new_dist
-                previous[neighbor] = (current, "drifter", hive)
+                previous[neighbor] = (current, "drifter", edge_info)
                 heapq.heappush(queue, (new_dist, neighbor))
 
         # Jump bridge neighbors (same cost as a gate jump)
@@ -173,15 +216,26 @@ def find_route(
     system_ids = [system_id for system_id, _, _ in path]
     systems = SolarSystem.objects.in_bulk(system_ids)
 
-    steps = [
-        {
-            "system": systems[system_id],
-            "via": via,
-            "hive": extra if via == "drifter" else None,
-            "bridge_name": extra if via == "bridge" else None,
-        }
-        for system_id, via, extra in path
-    ]
+    steps = []
+    for system_id, via, extra in path:
+        # Display label: normal wormholes read "Wormhole" instead of a
+        # hive name ("Exit Wormhole" / "Enter Wormhole here")
+        hive_label = None
+        if via == "drifter":
+            hive_label = (
+                "wormhole"
+                if extra["hive"] == DrifterWormhole.Hive.NORMAL
+                else extra["hive"]
+            )
+        steps.append(
+            {
+                "system": systems[system_id],
+                "via": via,
+                "hive": hive_label,
+                "edge": extra if via == "drifter" else None,
+                "bridge_name": extra if via == "bridge" else None,
+            }
+        )
 
     # ------------------------------------------------------------------
     # Annotate drifter transitions so the pilot knows WHERE to jump in.
@@ -190,22 +244,53 @@ def find_route(
     # in-game bookmark name of the entry and exit wormholes.
     # ------------------------------------------------------------------
     if use_drifters:
-        # Map of (system_id, hive) -> bookmark for all active wormholes
-        bookmarks = {
-            (wh.system_id, wh.hive): wh.bookmark
-            for wh in DrifterWormhole.active()
-        }
         for index, step in enumerate(steps):
             if step["via"] != "drifter" or index == 0:
                 continue
-            hive = step["hive"]
+            edge = step["edge"]
             entry_step = steps[index - 1]
-            # Tell the previous step that the pilot enters the hive here
-            entry_step["enter_hive"] = hive
-            entry_step["enter_bookmark"] = bookmarks.get(
-                (entry_step["system"].id, hive), ""
-            )
-            # Bookmark of the exit hole in the arrival system
-            step["exit_bookmark"] = bookmarks.get((step["system"].id, hive), "")
+            # Tell the previous step that the pilot enters the hole here
+            entry_step["enter_hive"] = step["hive"]
+            entry_step["enter_bookmark"] = edge["enter"].bookmark
+            entry_step["enter_status"] = _status_of(edge["enter"])
+            # Exit side in the arrival system
+            step["exit_bookmark"] = edge["exit"].bookmark
+            step["exit_status"] = _status_of(edge["exit"])
+
+        _attach_vote_counts(steps)
 
     return steps
+
+
+def _status_of(wormhole) -> dict:
+    """Status snapshot of a wormhole entry for the route display."""
+    return {
+        "id": wormhole.id,
+        "percent": wormhole.freshness_percent,
+        "eol": wormhole.eol,
+        "up_hour": 0,
+        "down_hour": 0,
+    }
+
+
+def _attach_vote_counts(steps) -> None:
+    """
+    Fill in the pilot vote counts (last hour) for all wormholes used in
+    the route, with a single query for the whole route.
+    """
+    status_dicts = {}
+    for step in steps:
+        for key in ("enter_status", "exit_status"):
+            status = step.get(key)
+            if status:
+                status_dicts.setdefault(status["id"], []).append(status)
+    if not status_dicts:
+        return
+
+    cutoff = timezone.now() - datetime.timedelta(hours=1)
+    votes = WormholeStatusReport.objects.filter(
+        wormhole_id__in=status_dicts.keys(), created_at__gte=cutoff
+    ).values_list("wormhole_id", "is_up")
+    for wormhole_id, is_up in votes:
+        for status in status_dicts[wormhole_id]:
+            status["up_hour" if is_up else "down_hour"] += 1

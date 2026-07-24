@@ -6,6 +6,32 @@ The form uses GET so routes are shareable as URLs
 {% endcomment %}
 
 {% block drifters_content %}
+    {% comment %}
+    Collapsible how-to box, collapsed by default so regulars are not
+    bothered. Text approved by the app owner.
+    {% endcomment %}
+    <div class="mb-3">
+        <button class="btn btn-sm btn-outline-secondary"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#route-howto">
+            <i class="fa-solid fa-circle-question"></i>
+            How to use the route planner
+        </button>
+        <div class="collapse mt-2" id="route-howto">
+            <div class="card card-body small">
+                <ol class="mb-0 ps-3">
+                    <li><strong>Enter start and destination.</strong> Both fields autocomplete known k-space systems.</li>
+                    <li><strong>Choose your shortcuts.</strong> "Use drifter wormholes" routes you through reported drifter holes (two holes of the same wormhole type connect through its network). "Use jump bridges" includes your alliance's Ansiblex connections.</li>
+                    <li><strong>Read the route from top to bottom.</strong> Each row is one system; the badge shows how you arrive there: Stargate, Jump bridge, or Exit (leaving a wormhole).</li>
+                    <li><strong>"Enter ... here" marks your dive.</strong> In that system, warp to the listed bookmark and jump into the wormhole. The exit row shows the bookmark on the far side.</li>
+                    <li><strong>"Set destination" guides you to the hole.</strong> It sets your in-game destination to the system containing the (first) wormhole on the route. Fly there by autopilot, then continue manually through the hole. On first use, EVE SSO will ask you to authorize the waypoint permission for one of your characters.</li>
+                    <li><strong>Check before you fly.</strong> Wormholes collapse. Verify the Alive value, EOL status and pilot reports of the holes on your route first.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
     <div class="card mb-3">
         <div class="card-body">
             <h5 class="card-title">Find route</h5>
@@ -102,14 +128,28 @@ The form uses GET so routes are shareable as URLs
                                             {% endif %}
                                         {% else %}
                                             <span class="badge bg-secondary"><i class="fa-solid fa-circle-notch"></i> Exit {{ step.hive|capfirst }}</span>
+                                            {% if step.exit_status %}
+                                                <br><small class="text-muted">Status:
+                                                    <span class="{% if step.exit_status.percent >= 60 %}text-success{% elif step.exit_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.exit_status.percent }}%</span>{% if step.exit_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
+                                                    &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.exit_status.up_hour }}
+                                                    <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.exit_status.down_hour }} last hour
+                                                </small>
+                                            {% endif %}
                                             {% if step.exit_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> <span class="font-monospace">{{ step.exit_bookmark }}</span></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Exit bookmark: <span class="font-monospace">{{ step.exit_bookmark }}</span></small>
                                             {% endif %}
                                         {% endif %}
                                         {% if step.enter_hive %}
                                             <br><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter {{ step.enter_hive|capfirst }} here</span>
+                                            {% if step.enter_status %}
+                                                <br><small class="text-muted">Status:
+                                                    <span class="{% if step.enter_status.percent >= 60 %}text-success{% elif step.enter_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.enter_status.percent }}%</span>{% if step.enter_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
+                                                    &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.enter_status.up_hour }}
+                                                    <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.enter_status.down_hour }} last hour
+                                                </small>
+                                            {% endif %}
                                             {% if step.enter_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> <span class="font-monospace">{{ step.enter_bookmark }}</span></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Bookmark: <span class="font-monospace">{{ step.enter_bookmark }}</span></small>
                                             {% endif %}
                                         {% endif %}
                                     </td>
@@ -139,6 +179,31 @@ The form uses GET so routes are shareable as URLs
                         Set destination: {{ destination_target.name }}
                     </button>
                 </form>
+
+                {% comment %}
+                Alternative route: recalculates while avoiding the
+                wormholes of the current suggestion (accumulating over
+                repeated clicks). Shown only when wormholes are used.
+                {% endcomment %}
+                {% if route_uses_wormholes %}
+                    <form method="get" action="{% url 'swiftdrift:route' %}" class="mb-2 d-inline-block">
+                        <input type="hidden" name="start_name" value="{{ form.start_name.value|default:'' }}">
+                        <input type="hidden" name="dest_name" value="{{ form.dest_name.value|default:'' }}">
+                        {% if form.use_drifters.value %}<input type="hidden" name="use_drifters" value="on">{% endif %}
+                        {% if form.use_bridges.value %}<input type="hidden" name="use_bridges" value="on">{% endif %}
+                        <input type="hidden" name="avoid" value="{{ avoid_next }}">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="fa-solid fa-shuffle"></i>
+                            Find alternative route (avoid these wormholes)
+                        </button>
+                    </form>
+                {% endif %}
+                {% if avoided_count %}
+                    <p class="text-muted small mb-2">
+                        Avoiding {{ avoided_count }} distrusted wormhole{{ avoided_count|pluralize }}.
+                        A fresh search resets this.
+                    </p>
+                {% endif %}
 
             </div>
         </div>

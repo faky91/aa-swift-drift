@@ -7,12 +7,16 @@ Access control:
 - manage_access: delete any entry
 """
 
+import datetime
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission, User
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 
 import requests
@@ -29,7 +33,7 @@ from .forms import (
     WormholeForm,
 )
 from .importer import parse_jump_bridges
-from .models import DrifterWormhole, JumpBridge
+from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
 from .routing import find_route
 
 # django-esi v9 removed the generated Swagger client (esi.clients), so we
@@ -46,9 +50,31 @@ WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
 @permission_required("swiftdrift.basic_access")
 def index(request):
     """Overview of all active drifter wormholes."""
+    vote_cutoff = timezone.now() - datetime.timedelta(hours=1)
     wormholes = (
         DrifterWormhole.active()
-        .select_related("system__constellation__region", "created_by", "updated_by")
+        .select_related(
+            "system__constellation__region",
+            "destination_system",
+            "created_by",
+            "updated_by",
+        )
+        .annotate(
+            up_hour=Count(
+                "status_reports",
+                filter=Q(
+                    status_reports__created_at__gte=vote_cutoff,
+                    status_reports__is_up=True,
+                ),
+            ),
+            down_hour=Count(
+                "status_reports",
+                filter=Q(
+                    status_reports__created_at__gte=vote_cutoff,
+                    status_reports__is_up=False,
+                ),
+            ),
+        )
         .order_by("system__name")
     )
     context = {
@@ -69,6 +95,8 @@ def add(request):
             wormhole = DrifterWormhole(
                 system=form.cleaned_data["system"],
                 hive=form.cleaned_data["hive"],
+                destination_system=form.cleaned_data["destination_system"],
+                lifetime_hours=form.cleaned_data["lifetime_hours"],
                 mass_status=form.cleaned_data["mass_status"],
                 eol=form.cleaned_data["eol"],
                 bookmark=form.cleaned_data["bookmark"],
@@ -97,6 +125,8 @@ def edit(request, pk: int):
         if form.is_valid():
             wormhole.system = form.cleaned_data["system"]
             wormhole.hive = form.cleaned_data["hive"]
+            wormhole.destination_system = form.cleaned_data["destination_system"]
+            wormhole.lifetime_hours = form.cleaned_data["lifetime_hours"]
             wormhole.mass_status = form.cleaned_data["mass_status"]
             wormhole.eol = form.cleaned_data["eol"]
             wormhole.bookmark = form.cleaned_data["bookmark"]
@@ -111,6 +141,12 @@ def edit(request, pk: int):
             initial={
                 "system_name": wormhole.system.name,
                 "hive": wormhole.hive,
+                "destination_name": (
+                    wormhole.destination_system.name
+                    if wormhole.destination_system
+                    else ""
+                ),
+                "lifetime_hours": wormhole.lifetime_hours,
                 "mass_status": wormhole.mass_status,
                 "eol": wormhole.eol,
                 "bookmark": wormhole.bookmark,
@@ -150,15 +186,25 @@ def route(request):
     """Route search: start to destination, optionally via drifter shortcuts."""
     result = None
     jumps = None
+    avoid_ids = []
     form = RouteForm(request.GET or None)
 
     # Only calculate when the form was submitted and is valid
     if request.GET and form.is_valid():
+        # "Find alternative route": wormhole ids the user distrusts,
+        # accumulated across repeated clicks
+        avoid_ids = [
+            int(part)
+            for part in request.GET.get("avoid", "").split(",")
+            if part.strip().isdigit()
+        ]
+
         result = find_route(
             start_id=form.cleaned_data["start_system"].id,
             dest_id=form.cleaned_data["dest_system"].id,
             use_drifters=form.cleaned_data["use_drifters"],
             use_bridges=form.cleaned_data["use_bridges"],
+            exclude_wormhole_ids=avoid_ids,
         )
         if result is None:
             messages.warning(request, "No route found.")
@@ -179,11 +225,26 @@ def route(request):
         if destination_target is None:
             destination_target = result[-1]["system"]
 
+    # Wormhole entries used by this route: shown with their status and
+    # offered for exclusion via the "find alternative route" button
+    used_wormhole_ids = set()
+    if result:
+        for step in result:
+            for key in ("enter_status", "exit_status"):
+                if step.get(key):
+                    used_wormhole_ids.add(step[key]["id"])
+
     context = {
         "form": form,
         "route": result,
         "jumps": jumps,
         "destination_target": destination_target,
+        "avoided_count": len(avoid_ids),
+        # Next avoid value = already avoided + this route's wormholes
+        "avoid_next": ",".join(
+            str(pk) for pk in sorted(set(avoid_ids) | used_wormhole_ids)
+        ),
+        "route_uses_wormholes": bool(used_wormhole_ids),
     }
     return render(request, "swiftdrift/route.html", context)
 
@@ -326,6 +387,43 @@ def bridges_clear(request):
         deleted_count, _ = JumpBridge.objects.all().delete()
         messages.success(request, f"All {deleted_count} jump bridges deleted.")
     return redirect("swiftdrift:bridges")
+
+
+@login_required
+@permission_required("swiftdrift.basic_access")
+def vote(request, pk: int):
+    """
+    Pilot status vote for a wormhole: up = confirmed open, down =
+    reported gone. One changeable vote per user and wormhole. Purely
+    informational, never triggers automatic actions.
+    """
+    if request.method != "POST":
+        return redirect("swiftdrift:index")
+
+    wormhole = get_object_or_404(DrifterWormhole, pk=pk)
+    direction = request.POST.get("direction")
+    if direction not in ("up", "down"):
+        return redirect("swiftdrift:index")
+
+    WormholeStatusReport.objects.update_or_create(
+        wormhole=wormhole,
+        user=request.user,
+        defaults={"is_up": direction == "up"},
+    )
+    label = "still open" if direction == "up" else "gone"
+    messages.success(
+        request,
+        f"Noted: {wormhole.system.name} reported as {label}. "
+        "Thanks for the intel.",
+    )
+
+    # Return to the page the vote came from (overview or route)
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
+    return redirect("swiftdrift:index")
 
 
 @login_required

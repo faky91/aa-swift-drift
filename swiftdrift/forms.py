@@ -58,6 +58,30 @@ class WormholeForm(forms.Form):
         choices=DrifterWormhole.Hive.choices,
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+    destination_name = forms.CharField(
+        label="Destination system",
+        required=False,
+        max_length=100,
+        help_text="Normal wormholes only: the system on the far side.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. Amarr (normal wormholes only)",
+                "autocomplete": "off",
+                "data-system-autocomplete": "1",
+            }
+        ),
+    )
+    lifetime_hours = forms.IntegerField(
+        label="Lifetime (hours)",
+        required=False,
+        min_value=1,
+        max_value=72,
+        help_text="Optional, defaults to 16h. Mainly for normal wormholes.",
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "placeholder": "16"}
+        ),
+    )
     mass_status = forms.ChoiceField(
         label="Mass",
         choices=DrifterWormhole.MassStatus.choices,
@@ -97,6 +121,39 @@ class WormholeForm(forms.Form):
         name = self.cleaned_data["system_name"]
         self.cleaned_data["system"] = resolve_kspace_system(name)
         return name
+
+    def clean(self):
+        """
+        Normal wormholes are a direct connection, so they require the
+        destination system. For drifter wormholes both extra fields are
+        cleared: drifters connect through their network, and their
+        lifetime is fixed.
+        """
+        cleaned = super().clean()
+        hive = cleaned.get("hive")
+
+        if hive == DrifterWormhole.Hive.NORMAL:
+            destination_name = (cleaned.get("destination_name") or "").strip()
+            if not destination_name:
+                self.add_error(
+                    "destination_name",
+                    "Normal wormholes need a destination system.",
+                )
+            else:
+                destination = resolve_kspace_system(destination_name)
+                system = cleaned.get("system")
+                if system and destination.id == system.id:
+                    self.add_error(
+                        "destination_name",
+                        "Destination must differ from the system.",
+                    )
+                else:
+                    cleaned["destination_system"] = destination
+        else:
+            cleaned["destination_system"] = None
+            cleaned["lifetime_hours"] = None
+
+        return cleaned
 
 
 class RouteForm(forms.Form):

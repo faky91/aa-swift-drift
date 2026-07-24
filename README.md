@@ -35,7 +35,7 @@ Run all commands inside the venv of the Auth installation
 source /home/allianceserver/venv/auth/bin/activate
 
 # 2. Install the app (from a git repo, or from PyPI if published)
-pip install git+https://github.com/faky91/aa-swift-drift.git@v0.11.0
+pip install git+https://github.com/faky91/aa-swift-drift.git@v0.12.0
 # alternatively from a local checkout:
 # pip install /path/to/aa-swift-drift
 ```
@@ -93,7 +93,7 @@ In the Docker variant of Auth, the app is installed via the requirements
 of the Auth image. Add to `conf/requirements.txt`:
 
 ```
-aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.11.0
+aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.12.0
 ```
 
 The `local.py` entries are identical to the bare metal installation

@@ -55,6 +55,9 @@ class DrifterWormhole(models.Model):
         REDOUBT = "redoubt", "Redoubt"
         SENTINEL = "sentinel", "Sentinel"
         VIDETTE = "vidette", "Vidette"
+        # A regular (non-drifter) wormhole: a direct connection between
+        # two known systems, like a bridge with an expiry date
+        NORMAL = "normal", "Normal wormhole"
 
     class MassStatus(models.TextChoices):
         """Mass state of the wormhole."""
@@ -91,6 +94,25 @@ class DrifterWormhole(models.Model):
     )
 
     # End of life flag
+    # Only for NORMAL wormholes: the system on the far side.
+    # Drifter wormholes connect through their network instead.
+    destination_system = models.ForeignKey(
+        SolarSystem,
+        on_delete=models.CASCADE,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="Destination system",
+    )
+
+    # Optional lifetime override in hours (mainly for normal wormholes,
+    # e.g. 24h or 48h holes). Empty = app default (16h).
+    lifetime_hours = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Lifetime (hours)",
+    )
+
     eol = models.BooleanField(
         default=False,
         verbose_name="End of Life",
@@ -169,10 +191,12 @@ class DrifterWormhole(models.Model):
         if not self.eol:
             self.eol_at = None
 
-        # Default: creation time + maximum lifetime
-        expires = created + datetime.timedelta(
-            hours=app_settings.SWIFTDRIFT_DEFAULT_LIFETIME_HOURS
+        # Creation time + lifetime (entry override or app default)
+        lifetime = (
+            self.lifetime_hours
+            or app_settings.SWIFTDRIFT_DEFAULT_LIFETIME_HOURS
         )
+        expires = created + datetime.timedelta(hours=lifetime)
 
         # EOL caps the remaining lifetime at X hours
         if self.eol and self.eol_at:
@@ -266,3 +290,42 @@ class JumpBridge(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_system.name} <> {self.to_system.name}"
+
+
+class WormholeStatusReport(models.Model):
+    """
+    A pilot's status vote for a wormhole: still open (up) or gone (down).
+
+    Purely informational: the reports are DISPLAYED (e.g. "3 reports in
+    the last hour: down") but never trigger automatic actions. One vote
+    per user and wormhole; changing the vote refreshes the timestamp.
+    Reports are deleted together with the wormhole (CASCADE), so the
+    table stays small automatically.
+    """
+
+    wormhole = models.ForeignKey(
+        DrifterWormhole,
+        on_delete=models.CASCADE,
+        related_name="status_reports",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    # True = confirmed still open, False = reported gone/closed
+    is_up = models.BooleanField()
+    created_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        default_permissions = ()
+        constraints = [
+            models.UniqueConstraint(
+                fields=["wormhole", "user"],
+                name="swiftdrift_one_vote_per_user_and_wormhole",
+            )
+        ]
+
+    def __str__(self) -> str:
+        direction = "up" if self.is_up else "down"
+        return f"{self.wormhole_id} {direction} by {self.user_id}"

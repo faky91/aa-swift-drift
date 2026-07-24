@@ -22,6 +22,8 @@ urlpatterns = [
     path("bridges/<int:pk>/delete/", views.bridge_delete, name="bridge_delete"),
     path("bridges/import/", views.bridges_import, name="bridges_import"),
     path("bridges/clear/", views.bridges_clear, name="bridges_clear"),
+    # Pilot status votes (basic_access)
+    path("<int:pk>/vote/", views.vote, name="vote"),
     # Team overview (manage_access)
     path("team/", views.team, name="team"),
     # Autocomplete API for system names

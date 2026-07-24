@@ -37,6 +37,33 @@ The only difference is the title and the pre-filled values.
                         {{ form.hive }}
                     </div>
 
+                    {% comment %}
+                    Normal-wormhole fields: destination is required for
+                    normal wormholes, lifetime is optional. A small
+                    script below shows them only when "Normal wormhole"
+                    is selected.
+                    {% endcomment %}
+                    <div class="col-md-6" id="destination-field">
+                        <label class="form-label" for="{{ form.destination_name.id_for_label }}">
+                            {{ form.destination_name.label }}
+                        </label>
+                        {{ form.destination_name }}
+                        <div class="form-text">{{ form.destination_name.help_text }}</div>
+                        {% for error in form.destination_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-3" id="lifetime-field">
+                        <label class="form-label" for="{{ form.lifetime_hours.id_for_label }}">
+                            {{ form.lifetime_hours.label }}
+                        </label>
+                        {{ form.lifetime_hours }}
+                        <div class="form-text">{{ form.lifetime_hours.help_text }}</div>
+                        {% for error in form.lifetime_hours.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
                     {# Mass status #}
                     <div class="col-md-3">
                         <label class="form-label" for="{{ form.mass_status.id_for_label }}">
@@ -84,4 +111,22 @@ The only difference is the title and the pre-filled values.
             </form>
         </div>
     </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            "use strict";
+            // Show the destination/lifetime fields only for normal wormholes
+            const hiveSelect = document.getElementById("{{ form.hive.id_for_label }}");
+            const destinationField = document.getElementById("destination-field");
+            const lifetimeField = document.getElementById("lifetime-field");
+
+            function toggleNormalFields() {
+                const isNormal = hiveSelect.value === "normal";
+                destinationField.style.display = isNormal ? "" : "none";
+                lifetimeField.style.display = isNormal ? "" : "none";
+            }
+
+            hiveSelect.addEventListener("change", toggleNormalFields);
+            toggleNormalFields();
+        });
+    </script>
 {% endblock %}

@@ -23,7 +23,7 @@ from django.utils import timezone
 from eve_sde.models import Constellation, Region, SolarSystem, Stargate
 
 from .importer import parse_jump_bridges
-from .models import DrifterWormhole, JumpBridge
+from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
 from .routing import GRAPH_CACHE_KEY, find_route
 from .tasks import delete_expired_wormholes
 
@@ -236,3 +236,81 @@ class ImporterTests(SwiftDriftTestBase):
         entries, errors = parse_jump_bridges("1045899402916 Nowhere --> Bravo")
         self.assertEqual(entries, [])
         self.assertEqual(len(errors), 1)
+
+
+class NormalWormholeTests(SwiftDriftTestBase):
+    """Normal wormholes are direct A-B edges with optional lifetime."""
+
+    def test_normal_wormhole_connects_two_systems(self):
+        DrifterWormhole.objects.create(
+            system=self.c,
+            destination_system=self.x,
+            hive="normal",
+            created_by=self.user,
+        )
+        route = find_route(self.a.id, self.y.id, use_bridges=False)
+        steps = [(step["system"].name, step["via"]) for step in route]
+        self.assertEqual(
+            steps,
+            [
+                ("Alpha", "start"),
+                ("Bravo", "gate"),
+                ("Charlie", "gate"),
+                ("Xray", "drifter"),
+                ("Yankee", "gate"),
+            ],
+        )
+
+    def test_normal_wormhole_lifetime_override(self):
+        wormhole = DrifterWormhole.objects.create(
+            system=self.c,
+            destination_system=self.x,
+            hive="normal",
+            lifetime_hours=48,
+            created_by=self.user,
+        )
+        lifetime = wormhole.expires_at - wormhole.created_at
+        self.assertEqual(round(lifetime.total_seconds() / 3600), 48)
+
+    def test_exclusion_avoids_the_wormhole(self):
+        wormhole = DrifterWormhole.objects.create(
+            system=self.c,
+            destination_system=self.x,
+            hive="normal",
+            created_by=self.user,
+        )
+        route = find_route(
+            self.a.id,
+            self.y.id,
+            use_bridges=False,
+            exclude_wormhole_ids=[wormhole.id],
+        )
+        self.assertIsNone(route)
+
+
+class StatusReportTests(SwiftDriftTestBase):
+    """Pilot votes: one changeable vote per user, counted per hour."""
+
+    def test_one_vote_per_user_is_updated_not_duplicated(self):
+        wormhole = DrifterWormhole.objects.create(
+            system=self.b, hive="conflux", created_by=self.user
+        )
+        WormholeStatusReport.objects.update_or_create(
+            wormhole=wormhole, user=self.user, defaults={"is_up": True}
+        )
+        WormholeStatusReport.objects.update_or_create(
+            wormhole=wormhole, user=self.user, defaults={"is_up": False}
+        )
+        reports = WormholeStatusReport.objects.filter(wormhole=wormhole)
+        self.assertEqual(reports.count(), 1)
+        self.assertFalse(reports.first().is_up)
+
+    def test_reports_are_deleted_with_the_wormhole(self):
+        wormhole = DrifterWormhole.objects.create(
+            system=self.b, hive="conflux", created_by=self.user
+        )
+        WormholeStatusReport.objects.create(
+            wormhole=wormhole, user=self.user, is_up=False
+        )
+        wormhole.delete()
+        self.assertEqual(WormholeStatusReport.objects.count(), 0)

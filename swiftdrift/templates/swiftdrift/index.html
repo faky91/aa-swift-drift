@@ -87,7 +87,15 @@ clicking a header sorts by that column, clicking again reverses.
                         <tbody>
                             {% for wh in wormholes %}
                                 <tr>
-                                    <td><strong>{{ wh.system.name }}</strong></td>
+                                    <td>
+                                        <strong>{{ wh.system.name }}</strong>
+                                        {% if wh.destination_system %}
+                                            <br><small class="text-muted">
+                                                <i class="fa-solid fa-arrow-right"></i>
+                                                {{ wh.destination_system.name }}
+                                            </small>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {# Region via constellation; nullable in the SDE models #}
                                         {% if wh.system.constellation and wh.system.constellation.region %}
@@ -134,6 +142,35 @@ clicking a header sorts by that column, clicking again reverses.
                                                  style="width: {{ wh.freshness_percent }}%;">
                                                 {{ wh.freshness_percent }}%
                                             </div>
+                                        </div>
+                                        {% comment %}
+                                        Pilot votes: confirm open (up) or report gone
+                                        (down). Purely informational; the counts show
+                                        the reports of the last hour.
+                                        {% endcomment %}
+                                        <div class="d-flex align-items-center gap-2 mt-1 small"
+                                             title="Pilot reports in the last hour">
+                                            <form method="post" action="{% url 'swiftdrift:vote' wh.pk %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="direction" value="up">
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button type="submit"
+                                                        class="btn btn-link btn-sm p-0 text-success text-decoration-none"
+                                                        title="Confirm: still open">
+                                                    <i class="fa-solid fa-thumbs-up"></i> {{ wh.up_hour }}
+                                                </button>
+                                            </form>
+                                            <form method="post" action="{% url 'swiftdrift:vote' wh.pk %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="direction" value="down">
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button type="submit"
+                                                        class="btn btn-link btn-sm p-0 text-danger text-decoration-none"
+                                                        title="Report: wormhole is gone">
+                                                    <i class="fa-solid fa-thumbs-down"></i> {{ wh.down_hour }}
+                                                </button>
+                                            </form>
+                                            <span class="text-muted">last hour</span>
                                         </div>
                                     </td>
                                     <td>

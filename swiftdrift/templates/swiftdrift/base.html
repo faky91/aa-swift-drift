@@ -1,0 +1,93 @@
+{% extends "allianceauth/base-bs5.html" %}
+{% comment %}
+Base template of the app.
+Inherits from the Bootstrap 5 base layout of Alliance Auth so the app
+automatically picks up the active theme of the installation.
+{% endcomment %}
+
+{% block page_title %}Swift Drift{% endblock %}
+
+{% block header_nav_brand %}Swift Drift{% endblock %}
+
+{% block content %}
+    <div class="col-lg-12">
+
+        {# Tab navigation inside the app #}
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}"
+                   href="{% url 'swiftdrift:index' %}">
+                    Overview
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'route' %}active{% endif %}"
+                   href="{% url 'swiftdrift:route' %}">
+                    Find route
+                </a>
+            </li>
+            {% if perms.swiftdrift.edit_access %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'add' %}active{% endif %}"
+                       href="{% url 'swiftdrift:add' %}">
+                        Report wormhole
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+
+        {# Content of the respective sub page #}
+        {% block drifters_content %}{% endblock %}
+
+    </div>
+
+    {# ------------------------------------------------------------------ #}
+    {# Autocomplete for system fields.                                     #}
+    {# Activates on all inputs with data-system-autocomplete="1" and       #}
+    {# fetches suggestions as JSON from our API endpoint.                  #}
+    {# Uses the native HTML5 <datalist> element, no external framework.    #}
+    {# ------------------------------------------------------------------ #}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            "use strict";
+
+            const apiUrl = "{% url 'swiftdrift:system_search' %}";
+            const inputs = document.querySelectorAll("input[data-system-autocomplete]");
+
+            inputs.forEach(function (input, index) {
+                // Create a dedicated datalist per input field
+                const listId = "system-datalist-" + index;
+                const datalist = document.createElement("datalist");
+                datalist.id = listId;
+                document.body.appendChild(datalist);
+                input.setAttribute("list", listId);
+
+                let debounceTimer = null;
+
+                input.addEventListener("input", function () {
+                    const query = input.value.trim();
+
+                    // Wait briefly so we do not fire a request on every
+                    // keystroke (debounce, 200 ms)
+                    clearTimeout(debounceTimer);
+                    if (query.length < 2) {
+                        return;
+                    }
+                    debounceTimer = setTimeout(function () {
+                        fetch(apiUrl + "?q=" + encodeURIComponent(query))
+                            .then((response) => response.json())
+                            .then((data) => {
+                                // Refill the datalist with the results
+                                datalist.innerHTML = "";
+                                data.results.forEach(function (name) {
+                                    const option = document.createElement("option");
+                                    option.value = name;
+                                    datalist.appendChild(option);
+                                });
+                            });
+                    }, 200);
+                });
+            });
+        });
+    </script>
+{% endblock %}

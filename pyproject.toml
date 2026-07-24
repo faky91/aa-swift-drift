@@ -1,0 +1,49 @@
+##############################################################################
+# pyproject.toml
+#
+# Defines the Python package "aa-swift-drift".
+# This makes the app installable via pip, both on bare metal
+# (inside the venv of the Auth installation) and in the Docker variant
+# (via conf/requirements.txt).
+##############################################################################
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aa-swift-drift"
+version = "0.1.0"
+description = "Swift Drift - Drifter Wormhole Tracker for Alliance Auth"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "InnovaITec" },
+]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Dependencies:
+# - allianceauth>=4:        base platform (Bootstrap 5 templates)
+# - django-eveuniverse>=2:  EVE universe as Django models (systems, stargates)
+# - django-esi>=9:          ESI integration (used by eveuniverse)
+dependencies = [
+    "allianceauth>=4",
+    "django-eveuniverse>=2",
+    "django-esi>=9",
+]
+
+[tool.hatch.build.targets.wheel]
+# The actual Django app directory inside the package
+packages = ["swiftdrift"]

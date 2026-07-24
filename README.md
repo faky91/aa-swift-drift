@@ -1,0 +1,163 @@
+# aa-swift-drift
+
+Swift Drift - a Drifter Wormhole Tracker for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth).
+
+Allows a group of users with the right permissions to report and manage
+drifter wormholes (Barbican, Conflux, Redoubt, Sentinel, Vidette) in
+k-space systems. View-only users can calculate routes between two
+systems, using active drifter wormholes as shortcuts.
+
+## Features
+
+- Three roles via Auth permissions: view only, edit, admin
+- Report wormholes with system autocomplete, hive type, mass status, EOL flag and notes
+- Automatic expiry of entries (default: 16h, capped at 4h after EOL) via Celery task
+- Route search from start to destination with drifter shortcuts (Dijkstra over stargates + active wormholes)
+- Bootstrap 5, inherits the active theme of the Auth installation
+
+## Requirements
+
+- Alliance Auth >= 4 (Bootstrap 5)
+- [django-eveuniverse](https://gitlab.com/ErikKalkoken/django-eveuniverse) >= 2
+- django-esi >= 9
+
+## Installation: bare metal
+
+Run all commands inside the venv of the Auth installation
+(e.g. as user `allianceserver`):
+
+```bash
+# 1. Activate the venv
+source /home/allianceserver/venv/auth/bin/activate
+
+# 2. Install the app (from a git repo, or from PyPI if published)
+pip install git+https://gitlab.example.com/yourname/aa-swift-drift.git
+# alternatively from a local checkout:
+# pip install /path/to/aa-swift-drift
+```
+
+Then in `myauth/settings/local.py`:
+
+```python
+# Register the apps (eveuniverse only if not present yet)
+INSTALLED_APPS += [
+    "eveuniverse",
+    "swiftdrift",
+]
+
+# Load stargates, required for the route calculation
+EVEUNIVERSE_LOAD_STARGATES = True
+
+# Periodic task: delete expired wormholes every 5 minutes
+CELERYBEAT_SCHEDULE["swiftdrift_delete_expired"] = {
+    "task": "swiftdrift.tasks.delete_expired_wormholes",
+    "schedule": crontab(minute="*/5"),
+}
+```
+
+Note: `from celery.schedules import crontab` is already at the top of the
+standard `local.py`; add it if it is missing.
+
+Afterwards:
+
+```bash
+# Create the database tables
+python /home/allianceserver/myauth/manage.py migrate
+
+# Collect static files
+python /home/allianceserver/myauth/manage.py collectstatic --noinput
+
+# Load the EVE map incl. stargates (takes a while, runs via Celery)
+python /home/allianceserver/myauth/manage.py eveuniverse_load_data map
+
+# Restart Auth
+supervisorctl restart myauth:
+```
+
+## Installation: Docker
+
+In the Docker variant of Auth, the app is installed via the requirements
+of the Auth image. Add to `conf/requirements.txt`:
+
+```
+aa-swift-drift @ git+https://gitlab.example.com/yourname/aa-swift-drift.git
+```
+
+The `local.py` entries are identical to the bare metal installation
+(see above; in the Docker setup the file lives at `conf/local.py`).
+
+Then rebuild the image and run the migrations:
+
+```bash
+docker compose build
+docker compose up -d
+docker compose exec allianceauth_gunicorn bash
+
+# inside the container:
+auth migrate
+auth collectstatic --noinput
+auth eveuniverse_load_data map
+```
+
+The Celery Beat entry from `local.py` is picked up automatically by the
+beat container; nothing else to do there.
+
+## Permissions
+
+The app ships three permissions which are assigned to groups via
+**Admin > Groups** in Auth. All permission names are prefixed with
+"Swift Drift" so they are easy to find in the long permission list:
+
+| Permission | Shown as | Effect |
+|---|---|---|
+| `swiftdrift.basic_access` | Swift Drift - Can view wormholes and find routes | View only |
+| `swiftdrift.edit_access` | Swift Drift - Can report and edit wormholes | Report, edit, delete own entries |
+| `swiftdrift.manage_access` | Swift Drift - Can manage all wormhole entries | Additionally delete entries of other users |
+
+Tip: type "Swift Drift" into the permission filter box in the Django
+admin to see only these three.
+
+Recommendation: create three groups (e.g. "Swift Drift Viewer",
+"Swift Drift Editor", "Swift Drift Admin") and stack the permissions
+accordingly. Editors need `basic_access` AND `edit_access`,
+admins need all three.
+
+## Settings (optional, local.py)
+
+| Setting | Default | Description |
+|---|---|---|
+| `SWIFTDRIFT_DEFAULT_LIFETIME_HOURS` | 16 | Maximum lifetime of an entry from creation |
+| `SWIFTDRIFT_EOL_LIFETIME_HOURS` | 4 | Remaining lifetime after the EOL flag is set |
+| `SWIFTDRIFT_ROUTE_WH_WEIGHT` | 2 | Cost of a drifter jump in the route planner (in gates) |
+| `SWIFTDRIFT_GRAPH_CACHE_SECONDS` | 86400 | Cache duration of the stargate graph |
+
+## Project structure
+
+```
+aa-swift-drift/
+├── pyproject.toml              Package definition and dependencies
+├── README.md
+└── swiftdrift/
+    ├── __init__.py             Version number
+    ├── apps.py                 Django app configuration
+    ├── app_settings.py         Settings with defaults
+    ├── auth_hooks.py           Auth integration (menu + URLs)
+    ├── models.py               General (permissions) and DrifterWormhole
+    ├── forms.py                Forms (report, route)
+    ├── views.py                Pages and autocomplete API
+    ├── urls.py                 URL routing
+    ├── routing.py              Dijkstra route calculation
+    ├── tasks.py                Celery task for expiry
+    ├── admin.py                Django admin
+    ├── migrations/
+    │   └── 0001_initial.py     Database schema
+    └── templates/swiftdrift/
+        ├── base.html           Base layout + autocomplete script
+        ├── index.html          Overview
+        ├── form.html           Report/edit
+        └── route.html          Route search
+```
+
+## License
+
+MIT

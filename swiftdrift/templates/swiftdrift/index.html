@@ -1,0 +1,95 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Overview of all active drifter wormholes as a Bootstrap table.
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Active drifter wormholes</h5>
+
+            {% if wormholes %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>System</th>
+                                <th>Hive</th>
+                                <th>Mass</th>
+                                <th>EOL</th>
+                                <th>Notes</th>
+                                <th>Reported by</th>
+                                <th>Expires</th>
+                                {% if can_edit %}<th class="text-end">Actions</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for wh in wormholes %}
+                                <tr>
+                                    <td><strong>{{ wh.system.name }}</strong></td>
+                                    <td>{{ wh.get_hive_display }}</td>
+                                    <td>
+                                        {# Color-coded mass status #}
+                                        {% if wh.mass_status == "fresh" %}
+                                            <span class="badge bg-success">{{ wh.get_mass_status_display }}</span>
+                                        {% elif wh.mass_status == "reduced" %}
+                                            <span class="badge bg-warning text-dark">{{ wh.get_mass_status_display }}</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">{{ wh.get_mass_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if wh.eol %}
+                                            <span class="badge bg-danger">EOL</span>
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ wh.notes|default:"" }}</td>
+                                    <td>
+                                        {{ wh.created_by|default:"unknown" }}<br>
+                                        <small class="text-muted">{{ wh.created_at|date:"Y-m-d H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        {{ wh.expires_at|date:"Y-m-d H:i" }}<br>
+                                        <small class="text-muted">in {{ wh.expires_at|timeuntil }}</small>
+                                    </td>
+                                    {% if can_edit %}
+                                        <td class="text-end">
+                                            <a href="{% url 'swiftdrift:edit' wh.pk %}"
+                                               class="btn btn-sm btn-primary"
+                                               title="Edit">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </a>
+                                            {# Deleting is restricted to the creator or admins #}
+                                            {% if can_manage or wh.created_by_id == request.user.id %}
+                                                <form method="post"
+                                                      action="{% url 'swiftdrift:delete' wh.pk %}"
+                                                      class="d-inline"
+                                                      onsubmit="return confirm('Really delete the wormhole in {{ wh.system.name }}?');">
+                                                    {% csrf_token %}
+                                                    <button type="submit"
+                                                            class="btn btn-sm btn-danger"
+                                                            title="Delete">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">
+                    No active drifter wormholes reported at the moment.
+                    {% if can_edit %}
+                        <a href="{% url 'swiftdrift:add' %}">Report one now.</a>
+                    {% endif %}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Route search for view-only users.
+The form uses GET so routes are shareable as URLs
+(e.g. for posting in Discord).
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Find route</h5>
+
+            <form method="get">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.start_name.id_for_label }}">
+                            {{ form.start_name.label }}
+                        </label>
+                        {{ form.start_name }}
+                        {% for error in form.start_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.dest_name.id_for_label }}">
+                            {{ form.dest_name.label }}
+                        </label>
+                        {{ form.dest_name }}
+                        {% for error in form.dest_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mb-2">
+                            {{ form.use_drifters }}
+                            <label class="form-check-label" for="{{ form.use_swiftdrift.id_for_label }}">
+                                {{ form.use_swiftdrift.label }}
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-route"></i>
+                            Calculate route
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Only show the result when a route was calculated #}
+    {% if route %}
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    Route: {{ jumps }} jumps
+                </h5>
+
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width: 4rem;">#</th>
+                                <th>System</th>
+                                <th>Security</th>
+                                <th>Connection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in route %}
+                                <tr>
+                                    <td>{{ forloop.counter0 }}</td>
+                                    <td><strong>{{ step.system.name }}</strong></td>
+                                    <td>{{ step.system.security_status|floatformat:1 }}</td>
+                                    <td>
+                                        {% if step.via == "start" %}
+                                            <span class="badge bg-secondary">Start</span>
+                                        {% elif step.via == "gate" %}
+                                            <span class="badge bg-primary">Stargate</span>
+                                        {% else %}
+                                            {# Highlight drifter jumps clearly #}
+                                            <span class="badge bg-info text-dark">
+                                                <i class="fa-solid fa-circle-notch"></i>
+                                                Drifter: {{ step.hive|capfirst }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="text-muted small mb-0">
+                    Drifter jumps require both wormholes to still be open.
+                    Check their status in the overview first.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

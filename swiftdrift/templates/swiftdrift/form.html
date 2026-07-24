@@ -1,0 +1,79 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Shared template for "Report wormhole" and "Edit wormhole".
+The only difference is the title and the pre-filled values.
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">{{ title }}</h5>
+
+            <form method="post">
+                {% csrf_token %}
+
+                {# Form-wide error messages #}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="row g-3">
+                    {# System field with autocomplete #}
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.system_name.id_for_label }}">
+                            {{ form.system_name.label }}
+                        </label>
+                        {{ form.system_name }}
+                        {% for error in form.system_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    {# Hive selection #}
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ form.hive.id_for_label }}">
+                            {{ form.hive.label }}
+                        </label>
+                        {{ form.hive }}
+                    </div>
+
+                    {# Mass status #}
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ form.mass_status.id_for_label }}">
+                            {{ form.mass_status.label }}
+                        </label>
+                        {{ form.mass_status }}
+                    </div>
+
+                    {# EOL checkbox #}
+                    <div class="col-12">
+                        <div class="form-check">
+                            {{ form.eol }}
+                            <label class="form-check-label" for="{{ form.eol.id_for_label }}">
+                                {{ form.eol.label }}
+                            </label>
+                        </div>
+                    </div>
+
+                    {# Notes #}
+                    <div class="col-12">
+                        <label class="form-label" for="{{ form.notes.id_for_label }}">
+                            {{ form.notes.label }}
+                        </label>
+                        {{ form.notes }}
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        Save
+                    </button>
+                    <a href="{% url 'swiftdrift:index' %}" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

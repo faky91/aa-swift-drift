@@ -78,7 +78,7 @@ def get_drifter_edges() -> dict:
     return edges
 
 
-def find_route(start_id: int, dest_id: int, use_swiftdrift: bool = True):
+def find_route(start_id: int, dest_id: int, use_drifters: bool = True):
     """
     Calculate the shortest route from start_id to dest_id.
 

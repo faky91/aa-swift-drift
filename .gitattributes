@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repo and on checkout.
+# The code runs on Linux servers, so LF everywhere avoids
+# CRLF issues in scripts and diffs.
+* text=auto eol=lf

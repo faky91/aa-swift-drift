@@ -44,6 +44,11 @@ dependencies = [
     "django-esi>=9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/faky91/aa-swift-drift"
+Source = "https://github.com/faky91/aa-swift-drift"
+Tracker = "https://github.com/faky91/aa-swift-drift/issues"
+
 [tool.hatch.build.targets.wheel]
 # The actual Django app directory inside the package
 packages = ["swiftdrift"]

@@ -77,8 +77,9 @@ One entry is treated as bidirectional by the route planner.
                 </button>
             </form>
             <p class="text-muted small mt-2 mb-0">
-                One bridge per line, e.g. the corptools export format
-                (<code>4-HWWF &raquo; UALX-3 - Name</code>). Duplicates are skipped.
+                One bridge per line in the export format
+                <code>1045899402916 Y-2ANO --&gt; KVN-36</code>
+                (leading structure ID is optional). Duplicates are skipped.
             </p>
         </div>
     </div>
@@ -107,6 +108,7 @@ One entry is treated as bidirectional by the route planner.
                             <tr>
                                 <th>From</th>
                                 <th>To</th>
+                                <th>Structure ID</th>
                                 <th>Structure name</th>
                                 <th>Added by</th>
                                 <th class="text-end">Actions</th>
@@ -117,6 +119,13 @@ One entry is treated as bidirectional by the route planner.
                                 <tr>
                                     <td><strong>{{ bridge.from_system.name }}</strong></td>
                                     <td><strong>{{ bridge.to_system.name }}</strong></td>
+                                    <td>
+                                        {% if bridge.structure_id %}
+                                            <code>{{ bridge.structure_id }}</code>
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if bridge.structure_name %}
                                             <code>{{ bridge.structure_name }}</code>

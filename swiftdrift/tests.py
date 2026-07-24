@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from eve_sde.models import Constellation, Region, SolarSystem, Stargate
 
+from .importer import parse_jump_bridges
 from .models import DrifterWormhole, JumpBridge
 from .routing import GRAPH_CACHE_KEY, find_route
 from .tasks import delete_expired_wormholes
@@ -98,6 +99,24 @@ class ExpiryTests(SwiftDriftTestBase):
         wormhole.save()
         remaining = wormhole.expires_at - timezone.now()
         self.assertAlmostEqual(remaining.total_seconds() / 3600, 4, delta=0.1)
+
+    def test_freshness_of_new_wormhole_is_high(self):
+        wormhole = DrifterWormhole(
+            system=self.b, hive="conflux", created_by=self.user
+        )
+        wormhole.save()
+        self.assertGreaterEqual(wormhole.freshness_percent, 99)
+
+    def test_freshness_of_expired_wormhole_is_zero(self):
+        wormhole = DrifterWormhole(
+            system=self.b, hive="conflux", created_by=self.user
+        )
+        wormhole.save()
+        DrifterWormhole.objects.filter(pk=wormhole.pk).update(
+            expires_at=timezone.now() - datetime.timedelta(minutes=1)
+        )
+        wormhole.refresh_from_db()
+        self.assertEqual(wormhole.freshness_percent, 0)
 
     def test_task_deletes_expired_entries(self):
         wormhole = DrifterWormhole(
@@ -193,3 +212,27 @@ class RoutingTests(SwiftDriftTestBase):
             self.a.id, self.y.id, use_drifters=False, use_bridges=False
         )
         self.assertIsNone(route)
+
+
+class ImporterTests(SwiftDriftTestBase):
+    """Tests for the bridge list parser."""
+
+    def test_corptools_format_with_structure_id(self):
+        text = "1045899402916 Alpha --> Bravo"
+        entries, errors = parse_jump_bridges(text)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["structure_id"], 1045899402916)
+        self.assertEqual(entry["from_system"].name, "Alpha")
+        self.assertEqual(entry["to_system"].name, "Bravo")
+
+    def test_format_without_structure_id(self):
+        entries, errors = parse_jump_bridges("Alpha \u00bb Bravo - Papa Bridge")
+        self.assertEqual(errors, [])
+        self.assertIsNone(entries[0]["structure_id"])
+
+    def test_unknown_system_is_reported(self):
+        entries, errors = parse_jump_bridges("1045899402916 Nowhere --> Bravo")
+        self.assertEqual(entries, [])
+        self.assertEqual(len(errors), 1)

@@ -185,6 +185,23 @@ class DrifterWormhole(models.Model):
         super().save(*args, **kwargs)
 
     @property
+    def freshness_percent(self) -> int:
+        """
+        Rough estimate (0-100) of how likely the wormhole still exists.
+
+        Based on the remaining share of the entry's lifetime. This is an
+        estimate: the hole may have spawned before it was reported, and
+        EOL shortens the window (which lowers the value automatically,
+        because expires_at is recalculated when EOL is set).
+        """
+        now = timezone.now()
+        total = (self.expires_at - self.created_at).total_seconds()
+        remaining = (self.expires_at - now).total_seconds()
+        if total <= 0 or remaining <= 0:
+            return 0
+        return max(0, min(100, round(remaining / total * 100)))
+
+    @property
     def is_expired(self) -> bool:
         """True if the entry has expired (safety net for display logic)."""
         return self.expires_at <= timezone.now()
@@ -216,7 +233,15 @@ class JumpBridge(models.Model):
         verbose_name="To system",
     )
 
-    # In-game structure name, e.g. "4-HWWF >> UALX-3 - Bridge"
+    # In-game structure ID; helps locating the Ansiblex in game and can
+    # be used as an ESI waypoint target in a future version
+    structure_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Structure ID",
+    )
+
+    # In-game structure name, e.g. "Y-2ANO --> KVN-36"
     structure_name = models.CharField(
         max_length=100,
         blank=True,

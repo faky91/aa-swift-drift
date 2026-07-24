@@ -48,6 +48,10 @@ clicking a header sorts by that column, clicking again reverses.
                                 <th data-sortable class="cursor-pointer">Wormhole</th>
                                 <th data-sortable class="cursor-pointer">Mass</th>
                                 <th data-sortable class="cursor-pointer">EOL</th>
+                                <th data-sortable class="cursor-pointer"
+                                    title="Estimated chance the wormhole still exists">
+                                    Alive
+                                </th>
                                 <th>Notes</th>
                                 <th data-sortable class="cursor-pointer">Reported by</th>
                                 <th data-sortable class="cursor-pointer">Expires</th>
@@ -87,8 +91,41 @@ clicking a header sorts by that column, clicking again reverses.
                                             <span class="text-muted">–</span>
                                         {% endif %}
                                     </td>
+                                    {% comment %}
+                                    Freshness estimate as a colored bar:
+                                    green >= 60%, yellow >= 30%, red below.
+                                    data-sort makes the column sortable by value.
+                                    {% endcomment %}
+                                    <td data-sort="{{ wh.freshness_percent }}">
+                                        <div class="progress"
+                                             style="height: 18px; min-width: 90px;"
+                                             title="Estimated: based on report time and EOL status">
+                                            <div class="progress-bar
+                                                        {% if wh.freshness_percent >= 60 %}bg-success
+                                                        {% elif wh.freshness_percent >= 30 %}bg-warning text-dark
+                                                        {% else %}bg-danger{% endif %}"
+                                                 role="progressbar"
+                                                 style="width: {{ wh.freshness_percent }}%;">
+                                                {{ wh.freshness_percent }}%
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td>
-                                        {% if wh.bookmark %}<code>{{ wh.bookmark }}</code>{% if wh.notes %}<br>{% endif %}{% endif %}{{ wh.notes|default:"" }}
+                                        {% comment %}
+                                        The bookmark gets an explicit label and icon so
+                                        viewers know it is the in-game bookmark name and
+                                        not part of the free-text notes.
+                                        {% endcomment %}
+                                        {% if wh.bookmark %}
+                                            <span title="In-game bookmark at the wormhole">
+                                                <small class="text-muted">
+                                                    <i class="fa-solid fa-bookmark"></i> Bookmark:
+                                                </small>
+                                                <code>{{ wh.bookmark }}</code>
+                                            </span>
+                                            {% if wh.notes %}<br>{% endif %}
+                                        {% endif %}
+                                        {{ wh.notes|default:"" }}
                                     </td>
                                     <td data-sort="{{ wh.created_by|default:'zzz' }}">
                                         {{ wh.created_by|default:"unknown" }}<br>

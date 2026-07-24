@@ -220,8 +220,8 @@ class JumpBridgeImportForm(forms.Form):
             attrs={
                 "class": "form-control font-monospace",
                 "rows": 8,
-                "placeholder": "4-HWWF \u00bb UALX-3 - Papa Bridge\n"
-                               "1DQ1-A \u00bb T5ZI-S\n"
+                "placeholder": "1045899402916 Y-2ANO --> KVN-36\n"
+                               "1045899402917 1DQ1-A --> T5ZI-S\n"
                                "one bridge per line",
             }
         ),

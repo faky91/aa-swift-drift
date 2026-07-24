@@ -97,7 +97,7 @@ The form uses GET so routes are shareable as URLs
                                                 Exit {{ step.hive|capfirst }}
                                             </span>
                                             {% if step.exit_bookmark %}
-                                                <br><small class="text-muted">exit hole: <code>{{ step.exit_bookmark }}</code></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Exit bookmark: <code>{{ step.exit_bookmark }}</code></small>
                                             {% endif %}
                                         {% endif %}
                                         {% if step.enter_hive %}
@@ -107,7 +107,7 @@ The form uses GET so routes are shareable as URLs
                                                 Enter {{ step.enter_hive|capfirst }} here
                                             </span>
                                             {% if step.enter_bookmark %}
-                                                <br><small class="text-muted">bookmark: <code>{{ step.enter_bookmark }}</code></small>
+                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Bookmark: <code>{{ step.enter_bookmark }}</code></small>
                                             {% endif %}
                                         {% endif %}
                                     </td>

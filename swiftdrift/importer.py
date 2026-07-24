@@ -1,16 +1,19 @@
 """
 Bulk import parser for jump bridge lists.
 
-Accepts one bridge per line and tolerates the common community formats,
-in particular the corptools export which is based on the in-game
-Ansiblex structure names:
+Accepts one bridge per line and tolerates the common community formats.
+The primary format is the corptools export, which starts with the
+in-game structure ID (useful for finding the Ansiblex in game):
 
-    4-HWWF » UALX-3 - Papa Bridge
-    4-HWWF » UALX-3
-    4-HWWF --> UALX-3
-    4-HWWF <> UALX-3
-    4-HWWF,UALX-3,optional name
-    4-HWWF;UALX-3
+    1045899402916 Y-2ANO --> KVN-36
+
+Also accepted:
+
+    Y-2ANO --> KVN-36
+    Y-2ANO » KVN-36 - Papa Bridge
+    Y-2ANO <> KVN-36
+    Y-2ANO,KVN-36,optional name
+    Y-2ANO;KVN-36
 
 System names may contain spaces (e.g. "Old Man Star"), so the parser
 splits on explicit separators only, never on plain whitespace.
@@ -27,9 +30,17 @@ SEPARATORS = ["»", "-->", "<->", "<>", "->", ";", ",", "\t"]
 
 def _split_line(line: str):
     """
-    Split one line into (from_name, to_name, structure_name).
+    Split one line into (structure_id, from_name, to_name, structure_name).
+    structure_id is None when the line does not start with one.
     Returns None if no known separator is found.
     """
+    # Optional leading structure ID (corptools export format)
+    structure_id = None
+    first, _, rest = line.partition(" ")
+    if first.isdigit() and rest.strip():
+        structure_id = int(first)
+        line = rest.strip()
+
     for separator in SEPARATORS:
         if separator in line:
             left, right = line.split(separator, 1)
@@ -44,7 +55,7 @@ def _split_line(line: str):
             if separator in (",", ";") and separator in to_part:
                 to_part = to_part.split(separator, 1)[0]
 
-            return left.strip(), to_part.strip(), line.strip()
+            return structure_id, left.strip(), to_part.strip(), line.strip()
     return None
 
 
@@ -79,7 +90,7 @@ def parse_jump_bridges(text: str):
             errors.append(f"Line {line_number}: no separator found: {line!r}")
             continue
 
-        from_name, to_name, structure_name = parsed
+        structure_id, from_name, to_name, structure_name = parsed
         from_system = systems.get(from_name.lower())
         to_system = systems.get(to_name.lower())
 
@@ -101,6 +112,7 @@ def parse_jump_bridges(text: str):
 
         entries.append(
             {
+                "structure_id": structure_id,
                 "from_system": from_system,
                 "to_system": to_system,
                 "structure_name": structure_name[:100],

@@ -295,6 +295,7 @@ def bridges_import(request):
             from_system=entry["from_system"],
             to_system=entry["to_system"],
             structure_name=entry["structure_name"],
+            structure_id=entry["structure_id"],
             created_by=request.user,
         )
         existing.add(pair)

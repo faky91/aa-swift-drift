@@ -18,8 +18,11 @@ systems, using active drifter wormholes as shortcuts.
 ## Requirements
 
 - Alliance Auth >= 4 (Bootstrap 5)
-- [django-eveuniverse](https://gitlab.com/ErikKalkoken/django-eveuniverse) >= 2
+- [django-eveonline-sde](https://github.com/Solar-Helix-Independent-Transport/django-eveonline-sde) (eve_sde)
 - django-esi >= 9
+
+If you are already running allianceauth-corptools, eve_sde is already
+installed and loaded on your system and no extra setup is needed for it.
 
 ## Installation: bare metal
 
@@ -31,7 +34,7 @@ Run all commands inside the venv of the Auth installation
 source /home/allianceserver/venv/auth/bin/activate
 
 # 2. Install the app (from a git repo, or from PyPI if published)
-pip install git+https://github.com/faky91/aa-swift-drift.git@v0.1.0
+pip install git+https://github.com/faky91/aa-swift-drift.git@v0.2.0
 # alternatively from a local checkout:
 # pip install /path/to/aa-swift-drift
 ```
@@ -39,20 +42,29 @@ pip install git+https://github.com/faky91/aa-swift-drift.git@v0.1.0
 Then in `myauth/settings/local.py`:
 
 ```python
-# Register the apps (eveuniverse only if not present yet)
+# Register the app
 INSTALLED_APPS += [
-    "eveuniverse",
     "swiftdrift",
 ]
 
-# Load stargates, required for the route calculation
-EVEUNIVERSE_LOAD_STARGATES = True
+# Only needed if eve_sde is NOT installed yet (e.g. no corptools):
+# modeltranslation must be FIRST in INSTALLED_APPS, then add eve_sde.
+# INSTALLED_APPS.insert(0, "modeltranslation")
+# INSTALLED_APPS += ["eve_sde"]
 
 # Periodic task: delete expired wormholes every 5 minutes
 CELERYBEAT_SCHEDULE["swiftdrift_delete_expired"] = {
     "task": "swiftdrift.tasks.delete_expired_wormholes",
     "schedule": crontab(minute="*/5"),
 }
+
+# Recommended (from the eve_sde README): daily check for SDE updates.
+# Skip this if corptools already configured it.
+if "eve_sde" in INSTALLED_APPS:
+    CELERYBEAT_SCHEDULE["EVE SDE :: Check for SDE Updates"] = {
+        "task": "eve_sde.tasks.check_for_sde_updates",
+        "schedule": crontab(minute="0", hour="12"),
+    }
 ```
 
 Note: `from celery.schedules import crontab` is already at the top of the
@@ -67,8 +79,8 @@ python /home/allianceserver/myauth/manage.py migrate
 # Collect static files
 python /home/allianceserver/myauth/manage.py collectstatic --noinput
 
-# Load the EVE map incl. stargates (takes a while, runs via Celery)
-python /home/allianceserver/myauth/manage.py eveuniverse_load_data map
+# Load the SDE (skip if corptools already loaded it; runs via Celery)
+python /home/allianceserver/myauth/manage.py esde_load_sde
 
 # Restart Auth
 supervisorctl restart myauth:
@@ -80,7 +92,7 @@ In the Docker variant of Auth, the app is installed via the requirements
 of the Auth image. Add to `conf/requirements.txt`:
 
 ```
-aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.1.0
+aa-swift-drift @ git+https://github.com/faky91/aa-swift-drift.git@v0.2.0
 ```
 
 The `local.py` entries are identical to the bare metal installation
@@ -96,7 +108,8 @@ docker compose exec allianceauth_gunicorn bash
 # inside the container:
 auth migrate
 auth collectstatic --noinput
-auth eveuniverse_load_data map
+# Skip the next line if corptools already loaded the SDE
+auth esde_load_sde
 ```
 
 The Celery Beat entry from `local.py` is picked up automatically by the
@@ -156,6 +169,21 @@ aa-swift-drift/
         ├── index.html          Overview
         ├── form.html           Report/edit
         └── route.html          Route search
+```
+
+## Upgrading from 0.1.x (eveuniverse-based)
+
+Version 0.2.0 switched the SDE backend from django-eveuniverse to
+django-eveonline-sde. The wormhole table references the solar system
+model of the backend, so the app tables must be rebuilt once. All
+wormhole entries are short-lived anyway, so nothing of value is lost:
+
+```bash
+# BEFORE upgrading the package: roll back the app tables
+auth migrate swiftdrift zero
+
+# then update the pin in requirements to v0.2.0, rebuild, and:
+auth migrate
 ```
 
 ## License

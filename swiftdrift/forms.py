@@ -2,13 +2,13 @@
 Forms of the app.
 
 Systems are entered via a text field with autocomplete and resolved
-server-side against the eveuniverse database. This is more robust than
+server-side against the SDE database (eve_sde). This is more robust than
 a dropdown with ~5000 entries.
 """
 
 from django import forms
 
-from eveuniverse.models import EveSolarSystem
+from eve_sde.models import SolarSystem
 
 from .models import DrifterWormhole
 
@@ -19,18 +19,18 @@ KSPACE_MIN_ID = 30000000
 KSPACE_MAX_ID = 31000000
 
 
-def resolve_kspace_system(name: str) -> EveSolarSystem:
+def resolve_kspace_system(name: str) -> SolarSystem:
     """
-    Resolve a system name to an EveSolarSystem object.
+    Resolve a system name to a SolarSystem object.
     Raises ValidationError if the system does not exist.
     """
     try:
-        return EveSolarSystem.objects.get(
+        return SolarSystem.objects.get(
             name__iexact=name.strip(),
             id__gte=KSPACE_MIN_ID,
             id__lt=KSPACE_MAX_ID,
         )
-    except EveSolarSystem.DoesNotExist:
+    except SolarSystem.DoesNotExist:
         raise forms.ValidationError(
             f"System '{name}' not found. Please enter a valid "
             "k-space system name."

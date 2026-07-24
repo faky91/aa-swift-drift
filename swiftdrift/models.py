@@ -19,7 +19,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-from eveuniverse.models import EveSolarSystem
+from eve_sde.models import SolarSystem
 
 from . import app_settings
 
@@ -69,7 +69,7 @@ class DrifterWormhole(models.Model):
 
     # The k-space system where the wormhole was found
     system = models.ForeignKey(
-        EveSolarSystem,
+        SolarSystem,
         on_delete=models.CASCADE,
         related_name="+",
         verbose_name="System",

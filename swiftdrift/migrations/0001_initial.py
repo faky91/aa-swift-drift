@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("eveuniverse", "0001_initial"),
+        ("eve_sde", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -118,7 +118,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="+",
-                        to="eveuniverse.evesolarsystem",
+                        to="eve_sde.solarsystem",
                         verbose_name="System",
                     ),
                 ),

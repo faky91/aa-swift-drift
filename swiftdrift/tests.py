@@ -20,15 +20,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from eveuniverse.models import (
-    EveCategory,
-    EveConstellation,
-    EveGroup,
-    EveRegion,
-    EveSolarSystem,
-    EveStargate,
-    EveType,
-)
+from eve_sde.models import Constellation, Region, SolarSystem, Stargate
 
 from .models import DrifterWormhole
 from .routing import GRAPH_CACHE_KEY, find_route
@@ -40,23 +32,16 @@ class SwiftDriftTestBase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        region = EveRegion.objects.create(id=1, name="TestRegion")
-        constellation = EveConstellation.objects.create(
-            id=1, name="TestCon", eve_region=region
-        )
-        category = EveCategory.objects.create(id=1, name="cat", published=True)
-        group = EveGroup.objects.create(
-            id=1, name="grp", eve_category=category, published=True
-        )
-        gate_type = EveType.objects.create(
-            id=1, name="Stargate", eve_group=group, published=True
+        region = Region.objects.create(id=1, name="TestRegion")
+        constellation = Constellation.objects.create(
+            id=1, name="TestCon", region=region
         )
 
         def make_system(offset, name):
-            return EveSolarSystem.objects.create(
+            return SolarSystem.objects.create(
                 id=30000000 + offset,
                 name=name,
-                eve_constellation=constellation,
+                constellation=constellation,
                 security_status=0.5,
             )
 
@@ -67,6 +52,8 @@ class SwiftDriftTestBase(TestCase):
         cls.x = make_system(5, "Xray")
         cls.y = make_system(6, "Yankee")
 
+        # One stargate per connection is enough for the adjacency list,
+        # the graph builder treats every pair as bidirectional
         gate_id = 0
         for system, destination in [
             (cls.a, cls.b),
@@ -75,12 +62,11 @@ class SwiftDriftTestBase(TestCase):
             (cls.x, cls.y),
         ]:
             gate_id += 1
-            EveStargate.objects.create(
+            Stargate.objects.create(
                 id=gate_id,
                 name=f"gate-{gate_id}",
-                eve_solar_system=system,
-                destination_eve_solar_system=destination,
-                eve_type=gate_type,
+                solar_system=system,
+                destination=destination,
             )
 
         cls.user = User.objects.create(username="tester")

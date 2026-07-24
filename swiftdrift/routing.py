@@ -10,9 +10,8 @@ Basic idea:
   implemented with Python standard library only (heapq), no external
   dependency.
 
-The stargate data comes from django-eveuniverse. The map including
-stargates must be loaded for this to work (see README,
-EVEUNIVERSE_LOAD_STARGATES).
+The stargate data comes from django-eveonline-sde (eve_sde). The SDE
+must be loaded once for this to work (see README, esde_load_sde).
 """
 
 import heapq
@@ -20,7 +19,7 @@ from collections import defaultdict
 
 from django.core.cache import cache
 
-from eveuniverse.models import EveSolarSystem, EveStargate
+from eve_sde.models import SolarSystem, Stargate
 
 from . import app_settings
 from .models import DrifterWormhole
@@ -42,9 +41,9 @@ def get_stargate_graph() -> dict:
 
     graph = defaultdict(set)
     # Every stargate knows its own system and the destination system
-    pairs = EveStargate.objects.values_list(
-        "eve_solar_system_id",
-        "destination_eve_solar_system_id",
+    pairs = Stargate.objects.values_list(
+        "solar_system_id",
+        "destination_id",
     )
     for system_id, destination_id in pairs:
         if system_id and destination_id:
@@ -85,7 +84,7 @@ def find_route(start_id: int, dest_id: int, use_swiftdrift: bool = True):
 
     Returns: a list of steps, or None if no route exists.
     Each step is a dict:
-        {"system": EveSolarSystem, "via": "start" | "gate" | "drifter",
+        {"system": SolarSystem, "via": "start" | "gate" | "drifter",
          "hive": None | "conflux" | ...}
     """
     gates = get_stargate_graph()
@@ -149,7 +148,7 @@ def find_route(start_id: int, dest_id: int, use_swiftdrift: bool = True):
 
     # Load all system objects in one query (instead of one per step)
     system_ids = [system_id for system_id, _, _ in path]
-    systems = EveSolarSystem.objects.in_bulk(system_ids)
+    systems = SolarSystem.objects.in_bulk(system_ids)
 
     return [
         {"system": systems[system_id], "via": via, "hive": hive}

@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from eveuniverse.models import EveSolarSystem
+from eve_sde.models import SolarSystem
 
 from .forms import KSPACE_MAX_ID, KSPACE_MIN_ID, RouteForm, WormholeForm
 from .models import DrifterWormhole
@@ -154,7 +154,7 @@ def system_search(request):
     names = []
     if len(query) >= 2:  # only search from 2 characters onwards
         names = list(
-            EveSolarSystem.objects.filter(
+            SolarSystem.objects.filter(
                 name__istartswith=query,
                 id__gte=KSPACE_MIN_ID,
                 id__lt=KSPACE_MAX_ID,

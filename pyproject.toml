@@ -13,7 +13,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aa-swift-drift"
-version = "0.1.0"
+version = "0.2.0"
 description = "Swift Drift - Drifter Wormhole Tracker for Alliance Auth"
 readme = "README.md"
 license = { text = "MIT" }
@@ -35,12 +35,14 @@ classifiers = [
 ]
 
 # Dependencies:
-# - allianceauth>=4:        base platform (Bootstrap 5 templates)
-# - django-eveuniverse>=2:  EVE universe as Django models (systems, stargates)
-# - django-esi>=9:          ESI integration (used by eveuniverse)
+# - allianceauth>=4:            base platform (Bootstrap 5 templates)
+# - django-eveonline-sde:       EVE SDE as Django models (systems, stargates),
+#                               same foundation as allianceauth-corptools
+# - django-esi>=9:              ESI integration (reserved for future features
+#                               like "set destination in game")
 dependencies = [
     "allianceauth>=4",
-    "django-eveuniverse>=2",
+    "django-eveonline-sde>=0.0.1b2",
     "django-esi>=9",
 ]
 

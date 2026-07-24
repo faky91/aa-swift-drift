@@ -26,6 +26,15 @@ from .forms import (
 from .models import DrifterWormhole, JumpBridge
 from .routing import find_route
 
+# Shared ESI client for this app (lazy, created once per process)
+esi = EsiClientProvider(app_info_text="aa-swift-drift")
+
+# The ESI scope needed to write autopilot waypoints into the game client
+WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
+
+# Hard cap for the waypoint loop, protects against absurd inputs
+MAX_WAYPOINTS = 50
+
 
 @login_required
 @permission_required("swiftdrift.basic_access")
@@ -259,6 +268,58 @@ def team(request):
 
     context = {"members": members}
     return render(request, "swiftdrift/team.html", context)
+
+
+@login_required
+@permission_required("swiftdrift.basic_access")
+@token_required(scopes=WAYPOINT_SCOPE)
+def set_destination(request, token):
+    """
+    Push the calculated route into the game client as autopilot waypoints.
+
+    Uses the ESI scope esi-ui.write_waypoint.v1. On the first call,
+    django-esi redirects the user through EVE SSO to authorize the scope
+    for one of their characters; the token is then reused. Because of
+    that redirect, the route arrives as a GET parameter (POST bodies do
+    not survive the SSO round trip).
+
+    Note: the in-game autopilot only understands stargate routes. This
+    sets one waypoint per system of our route; wormhole and jump bridge
+    legs are flown manually by the pilot.
+    """
+    raw_ids = request.GET.get("system_ids", "")
+
+    # Parse and validate: integers only, k-space range, sane count
+    system_ids = []
+    for part in raw_ids.split(","):
+        part = part.strip()
+        if not part.isdigit():
+            continue
+        system_id = int(part)
+        if KSPACE_MIN_ID <= system_id < KSPACE_MAX_ID:
+            system_ids.append(system_id)
+
+    if not system_ids or len(system_ids) > MAX_WAYPOINTS:
+        messages.error(request, "No valid route to send to the game client.")
+        return redirect("swiftdrift:route")
+
+    # First waypoint clears the existing route, the rest are appended
+    clear_existing = True
+    for system_id in system_ids:
+        esi.client.User_Interface.post_ui_autopilot_waypoint(
+            add_to_beginning=False,
+            clear_other_waypoints=clear_existing,
+            destination_id=system_id,
+            token=token.valid_access_token(),
+        ).result()
+        clear_existing = False
+
+    messages.success(
+        request,
+        f"Route with {len(system_ids)} waypoints sent to "
+        f"{token.character_name}'s game client.",
+    )
+    return redirect("swiftdrift:route")
 
 
 @login_required

@@ -15,6 +15,8 @@ urlpatterns = [
     path("<int:pk>/delete/", views.delete, name="delete"),
     # Route search (basic_access)
     path("route/", views.route, name="route"),
+    # Fill the start system with the character's location (ESI scope)
+    path("locate-me/", views.locate_me, name="locate_me"),
     # Send the route to the game client via ESI (basic_access + scope)
     path("set-destination/", views.set_destination, name="set_destination"),
     # Jump bridge management (edit_access)

@@ -74,7 +74,12 @@ clicking a header sorts by that column, clicking again reverses.
                                 <th data-sortable class="cursor-pointer">Wormhole<span class="sort-ind"></span></th>
                                 <th data-sortable class="cursor-pointer">Mass<span class="sort-ind"></span></th>
                                 <th data-sortable class="cursor-pointer">EOL<span class="sort-ind"></span></th>
-                                <th data-sortable class="cursor-pointer"
+                                {% comment %}
+                                Default sort: server delivers Alive
+                                descending; data-default-dir makes the
+                                header indicator reflect that on load.
+                                {% endcomment %}
+                                <th data-sortable data-default-dir="desc" class="cursor-pointer"
                                     title="Estimated chance the wormhole still exists">Alive<span class="sort-ind"></span></th>
                                 <th>Notes</th>
                                 <th data-sortable class="cursor-pointer">Reported by<span class="sort-ind"></span></th>
@@ -366,6 +371,17 @@ clicking a header sorts by that column, clicking again reverses.
                     });
                 });
             });
+
+            // ----------------------------------------------------------
+            // Initial sort indicator: the server delivers the rows
+            // pre-sorted (Alive descending); reflect that in the header
+            // ----------------------------------------------------------
+            const defaultHeader = document.querySelector("th[data-default-dir]");
+            if (defaultHeader) {
+                defaultHeader.setAttribute("data-dir", defaultHeader.dataset.defaultDir);
+                defaultHeader.querySelector(".sort-ind").textContent =
+                    defaultHeader.dataset.defaultDir === "desc" ? "\u25BC" : "\u25B2";
+            }
 
             // ----------------------------------------------------------
             // Relative expiry times, ticking without a page reload

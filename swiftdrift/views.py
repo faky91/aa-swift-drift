@@ -50,6 +50,10 @@ ESI_WAYPOINT_URL = "https://esi.evetech.net/latest/ui/autopilot/waypoint/"
 # The ESI scope needed to write autopilot waypoints into the game client
 WAYPOINT_SCOPE = "esi-ui.write_waypoint.v1"
 
+# The ESI scope and endpoint to read a character's current location
+LOCATION_SCOPE = "esi-location.read_location.v1"
+ESI_LOCATION_URL = "https://esi.evetech.net/latest/characters/{character_id}/location/"
+
 
 
 @login_required
@@ -75,6 +79,12 @@ def index(request):
             ),
         )
         .order_by("system__name")
+    )
+    # Default order: freshest first (Alive descending). The freshness
+    # is a computed property, so the small result set is sorted in
+    # Python; the column headers still allow any other sort.
+    wormholes = sorted(
+        wormholes, key=lambda wh: wh.freshness_percent, reverse=True
     )
     context = {
         "wormholes": wormholes,
@@ -691,6 +701,53 @@ def team(request):
 
     context = {"members": members}
     return render(request, "swiftdrift/team.html", context)
+
+
+@login_required
+@permission_required("swiftdrift.basic_access")
+@token_required(scopes=LOCATION_SCOPE)
+def locate_me(request, token):
+    """
+    Fill the route start with the character's current in-game system.
+
+    Uses the stored (refreshable) django-esi token, so after the one-time
+    SSO authorization this is a single click. The rest of the search
+    (destination, checkboxes) is carried through the request and
+    preserved.
+    """
+    try:
+        response = requests.get(
+            ESI_LOCATION_URL.format(character_id=token.character_id),
+            headers={
+                "Authorization": f"Bearer {token.valid_access_token()}",
+                "User-Agent": "aa-swift-drift (https://github.com/faky91/aa-swift-drift)",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        system_id = response.json().get("solar_system_id")
+    except requests.RequestException as error:
+        messages.error(request, f"ESI request failed: {error}")
+        return redirect(_route_url_with_params(request))
+
+    system = SolarSystem.objects.filter(id=system_id).first()
+    if system is None:
+        messages.error(
+            request,
+            "Your current location could not be resolved to a known system.",
+        )
+        return redirect(_route_url_with_params(request))
+
+    messages.success(
+        request,
+        f"Start set to {token.character_name}'s current location: "
+        f"{system.name}.",
+    )
+    params = request.GET.copy()
+    params["start_name"] = system.name
+    url = reverse("swiftdrift:route")
+    query = params.urlencode()
+    return redirect(f"{url}?{query}" if query else url)
 
 
 def _route_url_with_params(request):

@@ -47,7 +47,20 @@ The form uses GET so routes are shareable as URLs
                         <label class="form-label" for="{{ form.start_name.id_for_label }}">
                             {{ form.start_name.label }}
                         </label>
-                        {{ form.start_name }}
+                        <div class="input-group">
+                            {{ form.start_name }}
+                            {% comment %}
+                            Fills the start field with the character's
+                            current in-game system via ESI. One-time SSO
+                            authorization, afterwards a single click.
+                            {% endcomment %}
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    id="locate-me"
+                                    title="Use my current in-game location">
+                                <i class="fa-solid fa-location-dot"></i>
+                            </button>
+                        </div>
                         {% for error in form.start_name.errors %}
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
@@ -295,6 +308,30 @@ The form uses GET so routes are shareable as URLs
                 copyLink.addEventListener("click", function () {
                     navigator.clipboard.writeText(window.location.href)
                         .then(function () { flashCopied(copyLink); });
+                });
+            }
+
+            // ---- use my current location ----
+            const locateButton = document.getElementById("locate-me");
+            if (locateButton) {
+                locateButton.addEventListener("click", function () {
+                    const params = new URLSearchParams();
+                    const destInput = document.getElementById("{{ form.dest_name.id_for_label }}");
+                    if (destInput.value.trim()) {
+                        params.set("dest_name", destInput.value.trim());
+                    }
+                    {% comment %}Checkbox states travel along too{% endcomment %}
+                    if (document.getElementById("{{ form.use_drifters.id_for_label }}").checked) {
+                        params.set("use_drifters", "on");
+                    }
+                    if (document.getElementById("{{ form.use_normal_wh.id_for_label }}").checked) {
+                        params.set("use_normal_wh", "on");
+                    }
+                    if (document.getElementById("{{ form.use_bridges.id_for_label }}").checked) {
+                        params.set("use_bridges", "on");
+                    }
+                    const query = params.toString();
+                    window.location.href = "{% url 'swiftdrift:locate_me' %}" + (query ? "?" + query : "");
                 });
             }
 

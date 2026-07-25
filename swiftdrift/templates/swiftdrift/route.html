@@ -131,7 +131,7 @@ The form uses GET so routes are shareable as URLs
                 </h5>
 
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle">
+                    <table class="table table-striped align-middle w-auto" id="route-table">
                         <thead>
                             <tr>
                                 <th style="width: 4rem;">#</th>
@@ -144,17 +144,27 @@ The form uses GET so routes are shareable as URLs
                             {% for step in route %}
                                 <tr>
                                     <td>{{ forloop.counter0 }}</td>
-                                    <td>
-                                        <strong>{{ step.system.name }}</strong>
+                                    {% comment %}
+                                    Fixed-width name span forces the icon
+                                    group (dotlan, zkill, set destination)
+                                    to the same x-position in every row,
+                                    regardless of the system name length.
+                                    {% endcomment %}
+                                    <td class="text-nowrap">
+                                        <span class="d-inline-block route-sysname"><strong>{{ step.system.name }}</strong></span>
                                         <a href="https://evemaps.dotlan.net/system/{{ step.dotlan_name }}"
                                            target="_blank" rel="noopener"
-                                           class="text-muted ms-1" title="Dotlan">
+                                           class="text-muted" title="Dotlan">
                                             <i class="fa-solid fa-map"></i>
                                         </a>
                                         <a href="https://zkillboard.com/system/{{ step.system.id }}/"
                                            target="_blank" rel="noopener"
                                            class="text-muted" title="zKillboard">
                                             <i class="fa-solid fa-crosshairs"></i>
+                                        </a>
+                                        <a href="{% url 'swiftdrift:set_destination' %}?system_id={{ step.system.id }}&amp;start_name={{ form.start_name.value|default:''|urlencode }}&amp;dest_name={{ form.dest_name.value|default:''|urlencode }}{% if form.use_drifters.value %}&amp;use_drifters=on{% endif %}{% if form.use_normal_wh.value %}&amp;use_normal_wh=on{% endif %}{% if form.use_bridges.value %}&amp;use_bridges=on{% endif %}"
+                                           class="text-warning" title="Set in-game destination to {{ step.system.name }}">
+                                            <i class="fa-solid fa-location-arrow"></i>
                                         </a>
                                     </td>
                                     <td>
@@ -348,4 +358,12 @@ The form uses GET so routes are shareable as URLs
             });
         });
     </script>
+    <style>
+        /* Compact route table: content-sized columns with a moderate,
+           consistent gap; the fixed name width keeps the icon column
+           aligned across all rows. */
+        #route-table th,
+        #route-table td { padding-right: 2.5rem; }
+        #route-table .route-sysname { min-width: 8em; }
+    </style>
 {% endblock %}

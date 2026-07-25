@@ -127,11 +127,18 @@ clicking a header sorts by that column, clicking again reverses.
                                     {% endcomment %}
                                     <td data-sort="{{ wh.mass_status }}">
                                         {% if wh.mass_status == "fresh" %}
-                                            <span class="badge bg-success">{{ wh.get_mass_status_display }}</span>
+                                            {% comment %}
+                                            Mass uses its own visual language
+                                            (blue family + fill-state icon like
+                                            the in-game three-step display), so
+                                            the green/yellow/red axis belongs to
+                                            the Alive column alone.
+                                            {% endcomment %}
+                                            <span class="badge bg-dark border border-info text-info"><i class="fa-solid fa-circle"></i> {{ wh.get_mass_status_display }}</span>
                                         {% elif wh.mass_status == "reduced" %}
-                                            <span class="badge bg-warning text-dark">{{ wh.get_mass_status_display }}</span>
+                                            <span class="badge bg-dark border border-info text-info"><i class="fa-solid fa-circle-half-stroke"></i> {{ wh.get_mass_status_display }}</span>
                                         {% else %}
-                                            <span class="badge bg-danger">{{ wh.get_mass_status_display }}</span>
+                                            <span class="badge bg-dark border border-info text-info"><i class="fa-regular fa-circle"></i> {{ wh.get_mass_status_display }}</span>
                                         {% endif %}
                                     </td>
                                     {% comment %}
@@ -278,10 +285,15 @@ clicking a header sorts by that column, clicking again reverses.
                 disclaimer: the value is an estimate, not a guarantee.
                 {% endcomment %}
                 <div class="d-flex flex-wrap align-items-center gap-3 small text-muted mt-2">
+                    <span><strong>Alive bar:</strong></span>
                     <span><span class="badge bg-success">&nbsp;&nbsp;</span> &ge; 60%</span>
                     <span><span class="badge bg-warning">&nbsp;&nbsp;</span> 30&ndash;59%</span>
                     <span><span class="badge bg-danger">&nbsp;&nbsp;</span> &lt; 30%</span>
                     <span>Estimate only &ndash; a wormhole can already be gone even at a high value.</span>
+                    <span class="ms-3"><strong>Mass:</strong></span>
+                    <span class="text-info"><i class="fa-solid fa-circle"></i> stable</span>
+                    <span class="text-info"><i class="fa-solid fa-circle-half-stroke"></i> reduced</span>
+                    <span class="text-info"><i class="fa-regular fa-circle"></i> critical</span>
                 </div>
             {% else %}
                 <p class="text-muted mb-0">

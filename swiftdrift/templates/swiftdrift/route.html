@@ -109,6 +109,12 @@ The form uses GET so routes are shareable as URLs
             <div class="card-body">
                 <h5 class="card-title">
                     Route: {{ jumps }} jumps
+                    {% if gate_only_jumps %}
+                        <small class="text-muted">
+                            (gate-only: {{ gate_only_jumps }} jumps{% if saved_jumps > 0 %},
+                            you save {{ saved_jumps }}{% endif %})
+                        </small>
+                    {% endif %}
                 </h5>
 
                 <div class="table-responsive">
@@ -125,8 +131,24 @@ The form uses GET so routes are shareable as URLs
                             {% for step in route %}
                                 <tr>
                                     <td>{{ forloop.counter0 }}</td>
-                                    <td><strong>{{ step.system.name }}</strong></td>
-                                    <td>{{ step.system.security_status|floatformat:1 }}</td>
+                                    <td>
+                                        <strong>{{ step.system.name }}</strong>
+                                        <a href="https://evemaps.dotlan.net/system/{{ step.dotlan_name }}"
+                                           target="_blank" rel="noopener"
+                                           class="text-muted ms-1" title="Dotlan">
+                                            <i class="fa-solid fa-map"></i>
+                                        </a>
+                                        <a href="https://zkillboard.com/system/{{ step.system.id }}/"
+                                           target="_blank" rel="noopener"
+                                           class="text-muted" title="zKillboard">
+                                            <i class="fa-solid fa-crosshairs"></i>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="{% if step.system.security_status >= 0.45 %}text-success{% elif step.system.security_status > 0.0 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ step.system.security_status|floatformat:1 }}
+                                        </span>
+                                    </td>
                                     {% comment %}
                                     Departure-based: each row shows the action
                                     the pilot takes IN this system to reach the
@@ -196,6 +218,22 @@ The form uses GET so routes are shareable as URLs
                 </form>
 
                 {% comment %}
+                Share: copy the route as plain text (Discord/in-game
+                chat) or the URL of this exact search.
+                {% endcomment %}
+                <div class="mb-2 d-inline-block">
+                    <button type="button" class="btn btn-secondary" id="copy-route">
+                        <i class="fa-solid fa-copy"></i>
+                        Copy route
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="copy-link">
+                        <i class="fa-solid fa-link"></i>
+                        Copy link
+                    </button>
+                </div>
+                <textarea id="share-text" class="d-none" readonly>{{ share_text }}</textarea>
+
+                {% comment %}
                 Alternative route: recalculates while avoiding the
                 wormholes of the current suggestion (accumulating over
                 repeated clicks). Shown only when wormholes are used.
@@ -238,6 +276,28 @@ The form uses GET so routes are shareable as URLs
             if (!swapButton) {
                 return;
             }
+            // ---- copy route / copy link ----
+            function flashCopied(button) {
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+                setTimeout(function () { button.innerHTML = original; }, 1500);
+            }
+            const copyRoute = document.getElementById("copy-route");
+            const copyLink = document.getElementById("copy-link");
+            if (copyRoute) {
+                copyRoute.addEventListener("click", function () {
+                    navigator.clipboard.writeText(
+                        document.getElementById("share-text").value
+                    ).then(function () { flashCopied(copyRoute); });
+                });
+            }
+            if (copyLink) {
+                copyLink.addEventListener("click", function () {
+                    navigator.clipboard.writeText(window.location.href)
+                        .then(function () { flashCopied(copyLink); });
+                });
+            }
+
             swapButton.addEventListener("click", function () {
                 const startInput = document.getElementById("{{ form.start_name.id_for_label }}");
                 const destInput = document.getElementById("{{ form.dest_name.id_for_label }}");

@@ -26,14 +26,14 @@ clicking a header sorts by that column, clicking again reverses.
                     <div class="col-md-4">
                         <input type="text"
                                id="filter-system"
-                               class="form-control"
+                               class="form-control bg-dark text-light border-secondary swiftdrift-filter"
                                placeholder="Filter by system..."
                                autocomplete="off">
                     </div>
                     <div class="col-md-3">
                         <div class="dropdown">
                             <button type="button"
-                                    class="btn btn-outline-secondary dropdown-toggle w-100"
+                                    class="btn btn-secondary dropdown-toggle w-100"
                                     id="filter-region-button"
                                     data-bs-toggle="dropdown"
                                     data-bs-auto-close="outside">
@@ -48,7 +48,7 @@ clicking a header sorts by that column, clicking again reverses.
                     <div class="col-md-3">
                         <div class="dropdown">
                             <button type="button"
-                                    class="btn btn-outline-secondary dropdown-toggle w-100"
+                                    class="btn btn-secondary dropdown-toggle w-100"
                                     id="filter-hive-button"
                                     data-bs-toggle="dropdown"
                                     data-bs-auto-close="outside">
@@ -69,18 +69,16 @@ clicking a header sorts by that column, clicking again reverses.
                         <thead>
                             <tr>
                                 {# data-sortable marks a column as sortable for the script #}
-                                <th data-sortable class="cursor-pointer">System</th>
-                                <th data-sortable class="cursor-pointer">Region</th>
-                                <th data-sortable class="cursor-pointer">Wormhole</th>
-                                <th data-sortable class="cursor-pointer">Mass</th>
-                                <th data-sortable class="cursor-pointer">EOL</th>
+                                <th data-sortable class="cursor-pointer">System<span class="sort-ind"></span></th>
+                                <th data-sortable class="cursor-pointer">Region<span class="sort-ind"></span></th>
+                                <th data-sortable class="cursor-pointer">Wormhole<span class="sort-ind"></span></th>
+                                <th data-sortable class="cursor-pointer">Mass<span class="sort-ind"></span></th>
+                                <th data-sortable class="cursor-pointer">EOL<span class="sort-ind"></span></th>
                                 <th data-sortable class="cursor-pointer"
-                                    title="Estimated chance the wormhole still exists">
-                                    Alive
-                                </th>
+                                    title="Estimated chance the wormhole still exists">Alive<span class="sort-ind"></span></th>
                                 <th>Notes</th>
-                                <th data-sortable class="cursor-pointer">Reported by</th>
-                                <th data-sortable class="cursor-pointer">Expires</th>
+                                <th data-sortable class="cursor-pointer">Reported by<span class="sort-ind"></span></th>
+                                <th data-sortable class="cursor-pointer">Expires<span class="sort-ind"></span></th>
                                 {% if can_edit %}<th class="text-end">Actions</th>{% endif %}
                             </tr>
                         </thead>
@@ -131,8 +129,31 @@ clicking a header sorts by that column, clicking again reverses.
                                             <span class="badge bg-danger">{{ wh.get_mass_status_display }}</span>
                                         {% endif %}
                                     </td>
+                                    {% comment %}
+                                    Editors toggle EOL with one click; the
+                                    lower the barrier, the better the flags
+                                    are maintained. Viewers see badges only.
+                                    {% endcomment %}
                                     <td data-sort="{{ wh.eol|yesno:'1,0' }}">
-                                        {% if wh.eol %}
+                                        {% if can_edit %}
+                                            <form method="post"
+                                                  action="{% url 'swiftdrift:toggle_eol' wh.pk %}"
+                                                  class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                {% if wh.eol %}
+                                                    <button type="submit" class="btn btn-sm btn-danger"
+                                                            title="EOL is set. Click to clear.">
+                                                        EOL
+                                                    </button>
+                                                {% else %}
+                                                    <button type="submit" class="btn btn-sm btn-secondary"
+                                                            title="Click when the hole shows end-of-life">
+                                                        Set EOL
+                                                    </button>
+                                                {% endif %}
+                                            </form>
+                                        {% elif wh.eol %}
                                             <span class="badge bg-danger">EOL</span>
                                         {% else %}
                                             <span class="text-muted">–</span>
@@ -201,15 +222,23 @@ clicking a header sorts by that column, clicking again reverses.
                                             </span>
                                             {% if wh.notes %}<br>{% endif %}
                                         {% endif %}
-                                        {{ wh.notes|default:"" }}
+                                        {{ wh.notes|truncatechars:128 }}
                                     </td>
                                     <td data-sort="{{ wh.created_by|default:'zzz' }}">
                                         {{ wh.created_by|default:"unknown" }}<br>
                                         <small class="text-muted">{{ wh.created_at|date:"Y-m-d H:i" }}</small>
                                     </td>
+                                    {% comment %}
+                                    Relative time first (what pilots need),
+                                    absolute EVE time in the tooltip. The
+                                    span ticks client-side every 30s.
+                                    {% endcomment %}
                                     <td data-sort="{{ wh.expires_at|date:'U' }}">
-                                        {{ wh.expires_at|date:"Y-m-d H:i" }}<br>
-                                        <small class="text-muted">in {{ wh.expires_at|timeuntil }}</small>
+                                        <span class="expires-rel"
+                                              data-expires-ts="{{ wh.expires_at|date:'U' }}"
+                                              title="{{ wh.expires_at|date:'Y-m-d H:i' }} EVE">
+                                            in {{ wh.expires_at|timeuntil }}
+                                        </span>
                                     </td>
                                     {% if can_edit %}
                                         <td class="text-end">
@@ -305,13 +334,15 @@ clicking a header sorts by that column, clicking again reverses.
                     // Toggle direction: asc on first click, then flip
                     const ascending = header.getAttribute("data-dir") !== "asc";
 
-                    // Reset indicators on all headers, then mark this one
+                    // Reset indicators on all headers, then mark this
+                    // one. The indicator lives in a fixed-width span so
+                    // the header row never shifts or wraps.
                     headers.forEach(function (h) {
                         h.removeAttribute("data-dir");
-                        h.innerHTML = h.innerHTML.replace(/ [\u25B2\u25BC]$/, "");
+                        h.querySelector(".sort-ind").textContent = "";
                     });
                     header.setAttribute("data-dir", ascending ? "asc" : "desc");
-                    header.innerHTML += ascending ? " \u25B2" : " \u25BC";
+                    header.querySelector(".sort-ind").textContent = ascending ? "\u25B2" : "\u25BC";
 
                     // Sort the rows and re-attach them in the new order
                     const rows = Array.from(tbody.rows);
@@ -335,6 +366,27 @@ clicking a header sorts by that column, clicking again reverses.
                     });
                 });
             });
+
+            // ----------------------------------------------------------
+            // Relative expiry times, ticking without a page reload
+            // ----------------------------------------------------------
+            function renderRelativeTimes() {
+                document.querySelectorAll(".expires-rel").forEach(function (span) {
+                    const remaining = span.dataset.expiresTs * 1000 - Date.now();
+                    if (remaining <= 0) {
+                        span.textContent = "expired";
+                        span.classList.add("text-danger");
+                        return;
+                    }
+                    const hours = Math.floor(remaining / 3600000);
+                    const minutes = Math.floor((remaining % 3600000) / 60000);
+                    span.textContent = hours > 0
+                        ? "in " + hours + "h " + minutes + "m"
+                        : "in " + minutes + "m";
+                });
+            }
+            renderRelativeTimes();
+            setInterval(renderRelativeTimes, 30000);
 
             // ----------------------------------------------------------
             // Filtering

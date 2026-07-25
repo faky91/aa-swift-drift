@@ -145,13 +145,21 @@ class WormholeForm(forms.Form):
     notes = forms.CharField(
         label="Notes",
         required=False,
+        max_length=128,
         widget=forms.Textarea(
             attrs={
                 "class": "form-control",
                 "rows": 2,
-                "placeholder": "optional",
+                "maxlength": 128,
+                "placeholder": "optional, max. 128 characters",
             }
         ),
+    )
+
+    report_another = forms.BooleanField(
+        label="Report another wormhole after saving",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
 
     def clean_system_name(self):

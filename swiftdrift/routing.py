@@ -289,6 +289,8 @@ def find_route(
     for index, step in enumerate(steps):
         row = {
             "system": step["system"],
+            # Dotlan uses underscores instead of spaces in system URLs
+            "dotlan_name": step["system"].name.replace(" ", "_"),
             "enter_hive": step.get("enter_hive"),
             "enter_bookmark": step.get("enter_bookmark", ""),
             "enter_status": step.get("enter_status"),

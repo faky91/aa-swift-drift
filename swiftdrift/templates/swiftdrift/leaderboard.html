@@ -28,7 +28,7 @@ permanent report log. Visible to everyone with basic access.
                         </thead>
                         <tbody>
                             {% for entry in entries %}
-                                <tr>
+                                <tr{% if entry.user_id == request.user.id %} class="table-active border-start border-warning border-3"{% endif %}>
                                     <td>
                                         {% if entry.rank == 1 %}<i class="fa-solid fa-trophy text-warning"></i>
                                         {% elif entry.rank == 2 %}<i class="fa-solid fa-medal text-secondary"></i>
@@ -48,6 +48,20 @@ permanent report log. Visible to everyone with basic access.
                         </tbody>
                     </table>
                 </div>
+                {% comment %}
+                Own rank below the table, also when outside the top 50.
+                {% endcomment %}
+                {% if own_rank and not own_in_top %}
+                    <p class="mb-0">
+                        Your rank: <strong>#{{ own_rank }}</strong>
+                        with {{ own_points }} point{{ own_points|pluralize }}.
+                    </p>
+                {% elif not own_rank %}
+                    <p class="text-muted mb-0">
+                        You have no reported wormholes yet. Report one to
+                        enter the board.
+                    </p>
+                {% endif %}
             {% else %}
                 <p class="text-muted mb-0">
                     No reports counted yet. The log starts with this version,

@@ -93,14 +93,25 @@ def leaderboard(request):
     """
     now = timezone.now()
     cutoff_30 = now - datetime.timedelta(days=30)
-    rows = (
+    all_rows = list(
         WormholeReportLog.objects.values("user_id", "user__username")
         .annotate(
             points=Count("id"),
             last_30=Count("id", filter=Q(created_at__gte=cutoff_30)),
         )
-        .order_by("-points", "user__username")[:50]
+        .order_by("-points", "user__username")
     )
+
+    # Own rank, even outside the top 50
+    own_rank = None
+    own_points = 0
+    for index, row in enumerate(all_rows):
+        if row["user_id"] == request.user.id:
+            own_rank = index + 1
+            own_points = row["points"]
+            break
+
+    rows = all_rows[:50]
 
     # Main character names in one query
     user_ids = [row["user_id"] for row in rows]
@@ -115,6 +126,7 @@ def leaderboard(request):
     entries = [
         {
             "rank": index + 1,
+            "user_id": row["user_id"],
             "username": row["user__username"],
             "main_character": mains.get(row["user_id"], ""),
             "points": row["points"],
@@ -122,7 +134,13 @@ def leaderboard(request):
         }
         for index, row in enumerate(rows)
     ]
-    return render(request, "swiftdrift/leaderboard.html", {"entries": entries})
+    context = {
+        "entries": entries,
+        "own_rank": own_rank,
+        "own_points": own_points,
+        "own_in_top": any(e["user_id"] == request.user.id for e in entries),
+    }
+    return render(request, "swiftdrift/leaderboard.html", context)
 
 
 def _wh_type_map() -> dict:
@@ -141,9 +159,32 @@ def _wh_type_map() -> dict:
 @permission_required("swiftdrift.edit_access")
 def add(request):
     """Report a new drifter wormhole."""
+    duplicate_of = None
     if request.method == "POST":
         form = WormholeForm(request.POST)
         if form.is_valid():
+            # Duplicate guard: same system + same wormhole type already
+            # active. The reporter sees a warning with a link to the
+            # existing entry and can confirm to save anyway.
+            existing = (
+                DrifterWormhole.active()
+                .filter(
+                    system=form.cleaned_data["system"],
+                    hive=form.cleaned_data["hive"],
+                )
+                .first()
+            )
+            if existing and not request.POST.get("confirm_duplicate"):
+                duplicate_of = existing
+                context = {
+                    "form": form,
+                    "title": "Report wormhole",
+                    "duplicate_of": duplicate_of,
+                    "wh_type_options": wh_types.choices(),
+                    "wh_type_map": _wh_type_map(),
+                }
+                return render(request, "swiftdrift/form.html", context)
+
             wormhole = DrifterWormhole(
                 system=form.cleaned_data["system"],
                 hive=form.cleaned_data["hive"],
@@ -164,6 +205,10 @@ def add(request):
                 user=request.user, hive=wormhole.hive
             )
             messages.success(request, f"Wormhole in {wormhole.system.name} reported.")
+            # "Report another": straight back to an empty form, because
+            # scanners rarely report just one hole
+            if request.POST.get("report_another"):
+                return redirect("swiftdrift:add")
             return redirect("swiftdrift:index")
     else:
         form = WormholeForm()
@@ -259,6 +304,8 @@ def route(request):
     result = None
     jumps = None
     avoid_ids = []
+    gate_only_jumps = None
+    saved_jumps = None
     form = RouteForm(request.GET or None)
 
     # Only calculate when the form was submitted and is valid
@@ -285,6 +332,24 @@ def route(request):
             # Number of jumps = steps without the starting point
             jumps = len(result) - 1
 
+            # Gate-only comparison: shows every user what the shortcuts
+            # save. Second Dijkstra on the cached graph, cheap.
+            if (
+                form.cleaned_data["use_drifters"]
+                or form.cleaned_data["use_normal_wh"]
+                or form.cleaned_data["use_bridges"]
+            ):
+                gate_only = find_route(
+                    start_id=form.cleaned_data["start_system"].id,
+                    dest_id=form.cleaned_data["dest_system"].id,
+                    use_drifters=False,
+                    use_bridges=False,
+                    use_normal=False,
+                )
+                gate_only_jumps = len(gate_only) - 1 if gate_only else None
+                if gate_only_jumps is not None:
+                    saved_jumps = gate_only_jumps - jumps
+
     # Target for "set destination": the system that CONTAINS the (first)
     # wormhole entry on the route; the pilot flies there via gates and
     # continues manually. Routes without a wormhole leg target the final
@@ -307,10 +372,34 @@ def route(request):
                 if step.get(key):
                     used_wormhole_ids.add(step[key]["id"])
 
+    # Shareable plain-text version of the route for Discord/in-game chat
+    share_text = ""
+    if result:
+        lines = [
+            f"Route {result[0]['system'].name} -> "
+            f"{result[-1]['system'].name} ({jumps} jumps)"
+        ]
+        for number, step in enumerate(result):
+            if step["action"] == "gate":
+                action = "take gate"
+            elif step["action"] == "bridge":
+                action = f"jump bridge {step['bridge_label']}"
+            elif step["action"] == "drifter":
+                hive = (step.get("enter_hive") or "wormhole").capitalize()
+                bookmark = step.get("enter_bookmark") or "bookmark unknown"
+                action = f"ENTER {hive} ({bookmark})"
+            else:
+                action = "destination"
+            lines.append(f"{number}. {step['system'].name} - {action}")
+        share_text = "\n".join(lines)
+
     context = {
         "form": form,
         "route": result,
         "jumps": jumps,
+        "gate_only_jumps": gate_only_jumps,
+        "saved_jumps": saved_jumps,
+        "share_text": share_text,
         "destination_target": destination_target,
         "avoided_count": len(avoid_ids),
         # Next avoid value = already avoided + this route's wormholes
@@ -460,6 +549,28 @@ def bridges_clear(request):
         deleted_count, _ = JumpBridge.objects.all().delete()
         messages.success(request, f"All {deleted_count} jump bridges deleted.")
     return redirect("swiftdrift:bridges")
+
+
+@login_required
+@permission_required("swiftdrift.edit_access")
+def toggle_eol(request, pk: int):
+    """One-click EOL toggle from the overview (editors)."""
+    if request.method != "POST":
+        return redirect("swiftdrift:index")
+    wormhole = get_object_or_404(DrifterWormhole, pk=pk)
+    wormhole.eol = not wormhole.eol
+    wormhole.updated_by = request.user
+    wormhole.save()
+    state = "set" if wormhole.eol else "cleared"
+    messages.success(
+        request, f"EOL {state} for {wormhole.system.name}."
+    )
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
+    return redirect("swiftdrift:index")
 
 
 @login_required

@@ -77,6 +77,17 @@ automatically picks up the active theme of the installation.
 
         {# Content of the respective sub page #}
         {% block drifters_content %}{% endblock %}
+        <style>
+            /* Dark-theme contrast for filter inputs */
+            .swiftdrift-filter::placeholder { color: #adb5bd; opacity: 1; }
+            /* Sort indicator gets reserved space so headers never shift */
+            th[data-sortable] { white-space: nowrap; }
+            th[data-sortable] .sort-ind {
+                display: inline-block;
+                width: 1.1em;
+                text-align: center;
+            }
+        </style>
 
     </div>
 

@@ -24,6 +24,8 @@ urlpatterns = [
     path("bridges/clear/", views.bridges_clear, name="bridges_clear"),
     # Leaderboard (basic_access)
     path("leaderboard/", views.leaderboard, name="leaderboard"),
+    # One-click EOL toggle (edit_access)
+    path("<int:pk>/toggle-eol/", views.toggle_eol, name="toggle_eol"),
     # Pilot status votes (basic_access)
     path("<int:pk>/vote/", views.vote, name="vote"),
     # Team overview (manage_access)

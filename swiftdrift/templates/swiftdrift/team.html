@@ -12,14 +12,36 @@ exactly one source of truth.
             <h5 class="card-title">Editor team</h5>
 
             {% if members %}
+                {% comment %}
+                Text filter over user and main character; the report
+                columns come from the permanent report log, so counts
+                survive the auto-expiry of the wormhole entries.
+                {% endcomment %}
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <input type="text"
+                               id="team-filter"
+                               class="form-control"
+                               placeholder="Filter by user or character..."
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-center">
+                        <span class="text-muted small" id="team-count"></span>
+                    </div>
+                </div>
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle">
+                    <table class="table table-striped align-middle" id="team-table">
                         <thead>
                             <tr>
-                                <th>User</th>
-                                <th>Main character</th>
-                                <th>Editor</th>
-                                <th>Admin</th>
+                                <th data-sortable class="cursor-pointer">User</th>
+                                <th data-sortable class="cursor-pointer">Main character</th>
+                                <th data-sortable class="cursor-pointer">Editor</th>
+                                <th data-sortable class="cursor-pointer">Admin</th>
+                                <th data-sortable class="cursor-pointer" title="Reports in the last 30 days">30d</th>
+                                <th data-sortable class="cursor-pointer" title="Reports in the last 90 days">90d</th>
+                                <th data-sortable class="cursor-pointer" title="Reports in the last 180 days">180d</th>
+                                <th data-sortable class="cursor-pointer" title="Reports in the last 365 days">365d</th>
+                                <th data-sortable class="cursor-pointer" title="Reports since the log started (lifetime)">Total</th>
                                 <th>Access granted via</th>
                             </tr>
                         </thead>
@@ -42,6 +64,11 @@ exactly one source of truth.
                                             <span class="text-muted">–</span>
                                         {% endif %}
                                     </td>
+                                    <td data-sort="{{ member.reports_30 }}">{{ member.reports_30 }}</td>
+                                    <td data-sort="{{ member.reports_90 }}">{{ member.reports_90 }}</td>
+                                    <td data-sort="{{ member.reports_180 }}">{{ member.reports_180 }}</td>
+                                    <td data-sort="{{ member.reports_365 }}">{{ member.reports_365 }}</td>
+                                    <td data-sort="{{ member.reports_total }}"><strong>{{ member.reports_total }}</strong></td>
                                     <td>
                                         {% for group in member.via_groups %}
                                             <span class="badge bg-secondary">{{ group.name }}</span>
@@ -73,4 +100,65 @@ exactly one source of truth.
             </div>
         </div>
     </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            "use strict";
+            const table = document.getElementById("team-table");
+            if (!table) {
+                return;
+            }
+            const body = table.querySelector("tbody");
+            const allRows = Array.from(body.querySelectorAll("tr"));
+
+            // ---- text filter over the first two columns ----
+            const filterInput = document.getElementById("team-filter");
+            const countLabel = document.getElementById("team-count");
+
+            function applyFilter() {
+                const query = filterInput.value.trim().toLowerCase();
+                let visible = 0;
+                allRows.forEach(function (row) {
+                    const haystack = (
+                        row.cells[0].textContent + " " + row.cells[1].textContent
+                    ).toLowerCase();
+                    const matches = !query || haystack.includes(query);
+                    row.style.display = matches ? "" : "none";
+                    if (matches) {
+                        visible += 1;
+                    }
+                });
+                countLabel.textContent =
+                    visible === allRows.length
+                        ? allRows.length + " members"
+                        : visible + " of " + allRows.length + " members";
+            }
+            filterInput.addEventListener("input", applyFilter);
+            applyFilter();
+
+            // ---- click-to-sort on marked headers ----
+            table.querySelectorAll("th[data-sortable]").forEach(function (header, index) {
+                let ascending = true;
+                header.addEventListener("click", function () {
+                    const rows = Array.from(body.querySelectorAll("tr"));
+                    rows.sort(function (a, b) {
+                        const cellA = a.cells[index];
+                        const cellB = b.cells[index];
+                        const rawA = cellA.dataset.sort || cellA.textContent.trim();
+                        const rawB = cellB.dataset.sort || cellB.textContent.trim();
+                        const numA = parseFloat(rawA);
+                        const numB = parseFloat(rawB);
+                        let result;
+                        if (!isNaN(numA) && !isNaN(numB)) {
+                            result = numA - numB;
+                        } else {
+                            result = rawA.localeCompare(rawB, undefined, {sensitivity: "base"});
+                        }
+                        return ascending ? result : -result;
+                    });
+                    ascending = !ascending;
+                    rows.forEach(function (row) { body.appendChild(row); });
+                });
+            });
+        });
+    </script>
 {% endblock %}

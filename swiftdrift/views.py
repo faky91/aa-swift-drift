@@ -7,12 +7,15 @@ Access control:
 - manage_access: delete any entry
 """
 
+import datetime
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission, User
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 
@@ -30,7 +33,12 @@ from .forms import (
     WormholeForm,
 )
 from .importer import parse_jump_bridges
-from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
+from .models import (
+    DrifterWormhole,
+    JumpBridge,
+    WormholeReportLog,
+    WormholeStatusReport,
+)
 from . import wh_types
 from .routing import find_route
 
@@ -76,6 +84,47 @@ def index(request):
     return render(request, "swiftdrift/index.html", context)
 
 
+@login_required
+@permission_required("swiftdrift.basic_access")
+def leaderboard(request):
+    """
+    Public leaderboard: 1 point per reported wormhole, counted from the
+    permanent report log so expired entries still count.
+    """
+    now = timezone.now()
+    cutoff_30 = now - datetime.timedelta(days=30)
+    rows = (
+        WormholeReportLog.objects.values("user_id", "user__username")
+        .annotate(
+            points=Count("id"),
+            last_30=Count("id", filter=Q(created_at__gte=cutoff_30)),
+        )
+        .order_by("-points", "user__username")[:50]
+    )
+
+    # Main character names in one query
+    user_ids = [row["user_id"] for row in rows]
+    mains = {}
+    for user in User.objects.filter(id__in=user_ids).select_related(
+        "profile__main_character"
+    ):
+        profile = getattr(user, "profile", None)
+        if profile and getattr(profile, "main_character", None):
+            mains[user.id] = profile.main_character.character_name
+
+    entries = [
+        {
+            "rank": index + 1,
+            "username": row["user__username"],
+            "main_character": mains.get(row["user_id"], ""),
+            "points": row["points"],
+            "last_30": row["last_30"],
+        }
+        for index, row in enumerate(rows)
+    ]
+    return render(request, "swiftdrift/leaderboard.html", {"entries": entries})
+
+
 def _wh_type_map() -> dict:
     """Catalog as a JS-friendly map for client-side auto-fill."""
     return {
@@ -110,6 +159,10 @@ def add(request):
                 updated_by=request.user,
             )
             wormhole.save()
+            # Permanent log row: powers team stats and the leaderboard
+            WormholeReportLog.objects.create(
+                user=request.user, hive=wormhole.hive
+            )
             messages.success(request, f"Wormhole in {wormhole.system.name} reported.")
             return redirect("swiftdrift:index")
     else:
@@ -475,6 +528,29 @@ def team(request):
         .order_by("username")
     )
 
+    # Report counts per user from the permanent log (the wormhole
+    # entries themselves are deleted after expiry). One query for all
+    # windows via conditional aggregation.
+    now = timezone.now()
+    windows = {
+        "d30": now - datetime.timedelta(days=30),
+        "d90": now - datetime.timedelta(days=90),
+        "d180": now - datetime.timedelta(days=180),
+        "d365": now - datetime.timedelta(days=365),
+    }
+    counts = {
+        row["user_id"]: row
+        for row in WormholeReportLog.objects.filter(user__in=users)
+        .values("user_id")
+        .annotate(
+            d30=Count("id", filter=Q(created_at__gte=windows["d30"])),
+            d90=Count("id", filter=Q(created_at__gte=windows["d90"])),
+            d180=Count("id", filter=Q(created_at__gte=windows["d180"])),
+            d365=Count("id", filter=Q(created_at__gte=windows["d365"])),
+            total=Count("id"),
+        )
+    }
+
     members = []
     for user in users:
         # Main character name from the Auth profile, if one is linked
@@ -483,10 +559,16 @@ def team(request):
         if profile and getattr(profile, "main_character", None):
             main_character = profile.main_character.character_name
 
+        user_counts = counts.get(user.id, {})
         members.append(
             {
                 "user": user,
                 "main_character": main_character,
+                "reports_30": user_counts.get("d30", 0),
+                "reports_90": user_counts.get("d90", 0),
+                "reports_180": user_counts.get("d180", 0),
+                "reports_365": user_counts.get("d365", 0),
+                "reports_total": user_counts.get("total", 0),
                 "is_editor": user.has_perm("swiftdrift.edit_access"),
                 "is_admin": user.has_perm("swiftdrift.manage_access"),
                 # Groups of this user that grant one of the permissions

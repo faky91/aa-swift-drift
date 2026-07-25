@@ -23,7 +23,12 @@ from django.utils import timezone
 from eve_sde.models import Constellation, Region, SolarSystem, Stargate
 
 from .importer import parse_jump_bridges
-from .models import DrifterWormhole, JumpBridge, WormholeStatusReport
+from .models import (
+    DrifterWormhole,
+    JumpBridge,
+    WormholeReportLog,
+    WormholeStatusReport,
+)
 from .routing import GRAPH_CACHE_KEY, find_route
 from .tasks import delete_expired_wormholes
 
@@ -156,26 +161,24 @@ class RoutingTests(SwiftDriftTestBase):
         ).save()
 
         route = find_route(self.a.id, self.y.id, use_drifters=True)
-        steps = [(step["system"].name, step["via"]) for step in route]
+        steps = [(step["system"].name, step["action"]) for step in route]
         self.assertEqual(
             steps,
             [
-                ("Alpha", "start"),
-                ("Bravo", "gate"),
-                ("Xray", "drifter"),
-                ("Yankee", "gate"),
+                ("Alpha", "gate"),
+                ("Bravo", "drifter"),
+                ("Xray", "gate"),
+                ("Yankee", "destination"),
             ],
         )
 
-        # The entry annotation must sit on Bravo (the system BEFORE the
-        # drifter step) and carry the bookmark of the entry wormhole
+        # The departure row (Bravo) carries the entry annotation with
+        # the entry bookmark and both wormhole statuses
         bravo = route[1]
         self.assertEqual(bravo["enter_hive"], "conflux")
         self.assertEqual(bravo["enter_bookmark"], "CFX in Bravo")
-
-        # The arrival step carries the bookmark of the exit wormhole
-        xray = route[2]
-        self.assertEqual(xray["exit_bookmark"], "CFX in Xray")
+        self.assertIsNotNone(bravo["enter_status"])
+        self.assertIsNotNone(bravo["exit_status"])
 
     def test_different_hives_are_not_connected(self):
         # Conflux in B, Barbican in X: NO connection, different hives
@@ -192,15 +195,15 @@ class RoutingTests(SwiftDriftTestBase):
         )
 
         route = find_route(self.a.id, self.y.id, use_drifters=False)
-        steps = [(step["system"].name, step["via"]) for step in route]
+        steps = [(step["system"].name, step["action"]) for step in route]
         self.assertEqual(
             steps,
             [
-                ("Alpha", "start"),
+                ("Alpha", "gate"),
                 ("Bravo", "gate"),
-                ("Charlie", "gate"),
-                ("Xray", "bridge"),
-                ("Yankee", "gate"),
+                ("Charlie", "bridge"),
+                ("Xray", "gate"),
+                ("Yankee", "destination"),
             ],
         )
 
@@ -249,15 +252,15 @@ class NormalWormholeTests(SwiftDriftTestBase):
             created_by=self.user,
         )
         route = find_route(self.a.id, self.y.id, use_bridges=False)
-        steps = [(step["system"].name, step["via"]) for step in route]
+        steps = [(step["system"].name, step["action"]) for step in route]
         self.assertEqual(
             steps,
             [
-                ("Alpha", "start"),
+                ("Alpha", "gate"),
                 ("Bravo", "gate"),
-                ("Charlie", "gate"),
-                ("Xray", "drifter"),
-                ("Yankee", "gate"),
+                ("Charlie", "drifter"),
+                ("Xray", "gate"),
+                ("Yankee", "destination"),
             ],
         )
 
@@ -382,4 +385,29 @@ class JSpaceRoutingTests(SwiftDriftTestBase):
         route = find_route(self.a.id, jsystem.id, use_bridges=False)
         self.assertIsNotNone(route)
         self.assertEqual(route[-1]["system"].name, "J100001")
-        self.assertEqual(route[-1]["via"], "drifter")
+        self.assertEqual(route[-1]["action"], "destination")
+        self.assertEqual(route[-2]["action"], "drifter")
+
+
+class ReportLogTests(SwiftDriftTestBase):
+    """The permanent report log powers team stats and the leaderboard."""
+
+    def test_window_counts(self):
+        for days_ago in (5, 45, 120, 400):
+            log = WormholeReportLog.objects.create(user=self.user, hive="conflux")
+            WormholeReportLog.objects.filter(pk=log.pk).update(
+                created_at=timezone.now() - datetime.timedelta(days=days_ago)
+            )
+
+        now = timezone.now()
+        base = WormholeReportLog.objects.filter(user=self.user)
+        self.assertEqual(
+            base.filter(created_at__gte=now - datetime.timedelta(days=30)).count(), 1
+        )
+        self.assertEqual(
+            base.filter(created_at__gte=now - datetime.timedelta(days=90)).count(), 2
+        )
+        self.assertEqual(
+            base.filter(created_at__gte=now - datetime.timedelta(days=180)).count(), 3
+        )
+        self.assertEqual(base.count(), 4)

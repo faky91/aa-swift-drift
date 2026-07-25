@@ -25,11 +25,11 @@ The form uses GET so routes are shareable as URLs
                         <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" disabled><i class="fa-solid fa-right-left"></i></button>
                         button swaps them for the way back.</li>
                     <li class="mb-2"><strong>Choose your shortcuts.</strong> Drifter wormholes connect through their network, normal wormholes are direct connections, and jump bridges are your alliance's Ansiblex gates. Each can be toggled with its checkbox.</li>
-                    <li class="mb-2"><strong>Read the route from top to bottom.</strong> Each row is one system; the badge shows how you arrive there:
+                    <li class="mb-2"><strong>Read the route from top to bottom.</strong> Each row is one system; the badge shows what you do THERE to move on:
                         <span class="badge bg-secondary"><i class="fa-solid fa-arrow-right"></i> Stargate</span>
                         <span class="badge bg-secondary"><i class="fa-solid fa-bridge"></i> Jump bridge</span>
-                        <span class="badge bg-secondary"><i class="fa-solid fa-circle-notch"></i> Exit</span> (leaving a wormhole).</li>
-                    <li class="mb-2"><strong><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter ... here</span> marks your dive.</strong> In that system, warp to the listed <i class="fa-solid fa-bookmark"></i> bookmark and jump into the wormhole. The exit row shows the bookmark on the far side.</li>
+                        or entering a wormhole. The last row is your <span class="badge bg-secondary"><i class="fa-solid fa-flag-checkered"></i> Destination</span>.</li>
+                    <li class="mb-2"><strong><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter ... here</span> marks your dive.</strong> In that system, warp to the listed <i class="fa-solid fa-bookmark"></i> bookmark and jump into the wormhole. If the bookmark is unknown, scan or watch for the hole yourself.</li>
                     <li class="mb-2"><strong>Check the status line before you fly.</strong> Wormholes collapse. Each wormhole on the route shows its estimated <span class="text-success">Alive value</span>, size, <span class="text-danger">EOL</span> flag and the pilot reports (<i class="fa-solid fa-thumbs-up text-success"></i> still open / <i class="fa-solid fa-thumbs-down text-danger"></i> gone). Distrust the route? Use <em>Find alternative route</em> to recalculate without these wormholes.</li>
                     <li><strong><span class="badge bg-warning text-dark"><i class="fa-solid fa-location-crosshairs"></i> Set destination</span> guides you to the hole.</strong> It sets your in-game destination to the system containing the (first) wormhole on the route. Fly there by autopilot, then continue manually through the hole. On first use, EVE SSO will ask you to authorize the waypoint permission for one of your characters.</li>
                 </ol>
@@ -59,7 +59,7 @@ The form uses GET so routes are shareable as URLs
                     {% endcomment %}
                     <div class="col-auto d-flex align-items-end">
                         <button type="button"
-                                class="btn btn-outline-secondary mb-1"
+                                class="btn btn-secondary mb-1"
                                 id="swap-systems"
                                 title="Swap start and destination">
                             <i class="fa-solid fa-right-left"></i>
@@ -127,41 +127,44 @@ The form uses GET so routes are shareable as URLs
                                     <td>{{ forloop.counter0 }}</td>
                                     <td><strong>{{ step.system.name }}</strong></td>
                                     <td>{{ step.system.security_status|floatformat:1 }}</td>
+                                    {% comment %}
+                                    Departure-based: each row shows the action
+                                    the pilot takes IN this system to reach the
+                                    next row. The final row is the destination.
+                                    {% endcomment %}
                                     <td>
-                                        {% if step.via == "start" %}
-                                            <span class="badge bg-secondary"><i class="fa-solid fa-flag-checkered"></i> Start</span>
-                                        {% elif step.via == "gate" %}
+                                        {% if step.action == "gate" %}
                                             <span class="badge bg-secondary"><i class="fa-solid fa-arrow-right"></i> Stargate</span>
-                                        {% elif step.via == "bridge" %}
+                                        {% elif step.action == "bridge" %}
                                             <span class="badge bg-secondary"><i class="fa-solid fa-bridge"></i> Jump bridge</span>
-                                            {% if step.bridge_name %}
-                                                <br><small class="text-muted font-monospace">{{ step.bridge_name }}</small>
+                                            {% if step.bridge_label %}
+                                                <br><small class="text-muted font-monospace">{{ step.bridge_label }}</small>
                                             {% endif %}
-                                        {% else %}
-                                            <span class="badge bg-secondary"><i class="fa-solid fa-circle-notch"></i> Exit {{ step.hive|capfirst }}</span>
-                                            {% if step.exit_status %}
-                                                <br><small class="text-muted">Status:
-                                                    <span class="{% if step.exit_status.percent >= 60 %}text-success{% elif step.exit_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.exit_status.percent }}%</span>{% if step.exit_status.type %} &middot; {{ step.exit_status.type }}{% endif %}{% if step.exit_status.size %} &middot; {{ step.exit_status.size }}{% endif %}{% if step.exit_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
-                                                    &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.exit_status.up }}
-                                                    <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.exit_status.down }}
-                                                </small>
-                                            {% endif %}
-                                            {% if step.exit_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Exit bookmark: <span class="font-monospace">{{ step.exit_bookmark }}</span></small>
-                                            {% endif %}
-                                        {% endif %}
-                                        {% if step.enter_hive %}
-                                            <br><span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter {{ step.enter_hive|capfirst }} here</span>
+                                        {% elif step.action == "drifter" %}
+                                            <span class="badge bg-warning text-dark"><i class="fa-solid fa-right-to-bracket"></i> Enter {{ step.enter_hive|capfirst }} here</span>
+                                            <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Bookmark:
+                                                {% if step.enter_bookmark %}
+                                                    <span class="font-monospace">{{ step.enter_bookmark }}</span>
+                                                {% else %}
+                                                    unknown &ndash; keep your eyes open
+                                                {% endif %}
+                                            </small>
                                             {% if step.enter_status %}
-                                                <br><small class="text-muted">Status:
+                                                <br><small class="text-muted">This side:
                                                     <span class="{% if step.enter_status.percent >= 60 %}text-success{% elif step.enter_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.enter_status.percent }}%</span>{% if step.enter_status.type %} &middot; {{ step.enter_status.type }}{% endif %}{% if step.enter_status.size %} &middot; {{ step.enter_status.size }}{% endif %}{% if step.enter_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
                                                     &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.enter_status.up }}
                                                     <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.enter_status.down }}
                                                 </small>
                                             {% endif %}
-                                            {% if step.enter_bookmark %}
-                                                <br><small class="text-muted"><i class="fa-solid fa-bookmark"></i> Bookmark: <span class="font-monospace">{{ step.enter_bookmark }}</span></small>
+                                            {% if step.exit_status %}
+                                                <br><small class="text-muted">Far side:
+                                                    <span class="{% if step.exit_status.percent >= 60 %}text-success{% elif step.exit_status.percent >= 30 %}text-warning{% else %}text-danger{% endif %}">{{ step.exit_status.percent }}%</span>{% if step.exit_status.type %} &middot; {{ step.exit_status.type }}{% endif %}{% if step.exit_status.size %} &middot; {{ step.exit_status.size }}{% endif %}{% if step.exit_status.eol %} &middot; <span class="text-danger">EOL</span>{% endif %}
+                                                    &middot; <i class="fa-solid fa-thumbs-up text-success"></i> {{ step.exit_status.up }}
+                                                    <i class="fa-solid fa-thumbs-down text-danger"></i> {{ step.exit_status.down }}
+                                                </small>
                                             {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-flag-checkered"></i> Destination</span>
                                         {% endif %}
                                     </td>
                                 </tr>

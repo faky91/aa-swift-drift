@@ -1,0 +1,59 @@
+{% extends "swiftdrift/base.html" %}
+{% comment %}
+Public leaderboard: 1 point per reported wormhole, counted from the
+permanent report log. Visible to everyone with basic access.
+{% endcomment %}
+
+{% block drifters_content %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">
+                <i class="fa-solid fa-trophy text-warning"></i>
+                Reporting leaderboard
+            </h5>
+            <p class="text-muted small">
+                One point per reported wormhole. Keep the intel flowing.
+            </p>
+
+            {% if entries %}
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Pilot</th>
+                                <th>Points</th>
+                                <th>Last 30 days</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                                <tr>
+                                    <td>
+                                        {% if entry.rank == 1 %}<i class="fa-solid fa-trophy text-warning"></i>
+                                        {% elif entry.rank == 2 %}<i class="fa-solid fa-medal text-secondary"></i>
+                                        {% elif entry.rank == 3 %}<i class="fa-solid fa-medal" style="color: #cd7f32;"></i>
+                                        {% else %}{{ entry.rank }}{% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ entry.main_character|default:entry.username }}</strong>
+                                        {% if entry.main_character %}
+                                            <br><small class="text-muted">{{ entry.username }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ entry.points }}</strong></td>
+                                    <td>{{ entry.last_30 }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">
+                    No reports counted yet. The log starts with this version,
+                    so the board fills up from now on.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

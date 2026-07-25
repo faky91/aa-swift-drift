@@ -40,6 +40,12 @@ automatically picks up the active theme of the installation.
                     </a>
                 </li>
             {% endif %}
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'leaderboard' %}active{% endif %}"
+                   href="{% url 'swiftdrift:leaderboard' %}">
+                    Leaderboard
+                </a>
+            </li>
             {% comment %}
             Admin section: ms-auto pushes this and all following tabs to
             the right edge, visually separated from the user tabs.

@@ -363,3 +363,29 @@ class WormholeStatusReport(models.Model):
     def __str__(self) -> str:
         direction = "up" if self.is_up else "down"
         return f"{self.wormhole_id} {direction} by {self.user_id}"
+
+
+class WormholeReportLog(models.Model):
+    """
+    Permanent log of wormhole reports, one row per reported wormhole.
+
+    Needed because wormhole entries are deleted after expiry, so the
+    entries themselves cannot answer "how many reports in the last 90
+    days". The log rows are tiny, are never deleted with the wormhole,
+    and power the team statistics and the leaderboard (1 report =
+    1 point).
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    hive = models.CharField(max_length=16, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return f"report by {self.user_id} at {self.created_at:%Y-%m-%d}"

@@ -248,6 +248,16 @@ def find_route(
     # is located in the PREVIOUS system. We attach the hive and the
     # in-game bookmark name of the entry and exit wormholes.
     # ------------------------------------------------------------------
+    # Jump bridge labels: the stored structure name describes ONE side
+    # of the pair (e.g. "KVN-36 >> Y-2ANO"). Travelling the other way,
+    # that name is misleading, so the display label is computed from
+    # the actual travel direction using the in-game naming convention.
+    for index, step in enumerate(steps):
+        if step["via"] == "bridge" and index > 0:
+            step["bridge_label"] = (
+                f"{steps[index - 1]['system'].name} \u00bb {step['system'].name}"
+            )
+
     if wormhole_edges:
         for index, step in enumerate(steps):
             if step["via"] != "drifter" or index == 0:
@@ -258,13 +268,44 @@ def find_route(
             entry_step["enter_hive"] = step["hive"]
             entry_step["enter_bookmark"] = edge["enter"].bookmark
             entry_step["enter_status"] = _status_of(edge["enter"])
-            # Exit side in the arrival system
-            step["exit_bookmark"] = edge["exit"].bookmark
+            # Exit side in the arrival system. Note: no bookmark here
+            # on purpose. The bookmark stored on the far-side hole is
+            # that side's ENTRY bookmark; after jumping you are already
+            # at the hole, so an "exit bookmark" would be misleading.
             step["exit_status"] = _status_of(edge["exit"])
 
         _attach_vote_counts(steps)
 
-    return steps
+    # ------------------------------------------------------------------
+    # Transform into DEPARTURE-based rows: each row describes the action
+    # the pilot takes IN that system to reach the next one ("take the
+    # gate", "take the bridge Y-2ANO >> KVN-36", "enter the wormhole"),
+    # matching how pilots actually think. The final row is the
+    # destination. Entry annotations (enter_hive, bookmark, statuses)
+    # already live on the departure step; the far-side status is pulled
+    # up from the arrival step.
+    # ------------------------------------------------------------------
+    rows = []
+    for index, step in enumerate(steps):
+        row = {
+            "system": step["system"],
+            "enter_hive": step.get("enter_hive"),
+            "enter_bookmark": step.get("enter_bookmark", ""),
+            "enter_status": step.get("enter_status"),
+        }
+        if index + 1 < len(steps):
+            next_step = steps[index + 1]
+            row["action"] = next_step["via"]
+            row["bridge_label"] = next_step.get("bridge_label")
+            # Far-side status of the wormhole jump ahead
+            row["exit_status"] = next_step.get("exit_status")
+        else:
+            row["action"] = "destination"
+            row["bridge_label"] = None
+            row["exit_status"] = None
+        rows.append(row)
+
+    return rows
 
 
 def _status_of(wormhole) -> dict:
